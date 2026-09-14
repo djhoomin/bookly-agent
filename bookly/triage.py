@@ -1,0 +1,123 @@
+"""One cheap classification call that earns its keep twice.
+
+Every inbound turn is screened by Claude Haiku 4.5 before the expensive model
+sees it. That single call answers two questions at once:
+
+**Which model should handle this?** Most support traffic is an order lookup or a
+policy question, and running those on Opus is paying frontier prices to read a
+database row. Haiku is a fifth of the input price. At 10,000 conversations a day
+the difference is the whole line item, not a rounding error. See costs.py.
+
+**Is this abusive, or a fraud signal?** The same call flags it, and the flag is
+written to a log with the turn attached, which is the artifact a trust and safety
+team actually needs. Classification and screening want the same cheap pass over
+the same text, so doing them separately would be paying twice for one read.
+
+Rehearsal Studio, a product I am building with a language-training partner, uses
+Mistral's moderation endpoint for exactly this shape of job. Here the classifier
+is Haiku so the prototype stays on one provider, but the architecture is the
+same: a small model in front, deciding what the large one is allowed to be
+bothered with.
+"""
+
+from __future__ import annotations
+
+import json
+import os
+from dataclasses import asdict, dataclass
+from datetime import datetime, timezone
+from pathlib import Path
+
+TRIAGE_MODEL = "claude-haiku-4-5"
+HEAVY_MODEL = "claude-opus-5"
+LIGHT_MODEL = "claude-haiku-4-5"
+
+ABUSE_LOG = Path(os.environ.get("BOOKLY_ABUSE_LOG", "abuse_log.jsonl"))
+
+SCHEMA = {
+    "type": "object",
+    "properties": {
+        "intent": {"type": "string",
+                   "enum": ["order_status", "return_refund", "general_question",
+                            "complaint", "other"]},
+        "complexity": {"type": "string", "enum": ["simple", "complex"]},
+        "risk": {"type": "string",
+                 "enum": ["none", "abusive_language", "fraud_signal", "self_harm"]},
+        "reason": {"type": "string"},
+    },
+    "required": ["intent", "complexity", "risk", "reason"],
+    "additionalProperties": False,
+}
+
+INSTRUCTIONS = """Classify one inbound customer support message for an online bookstore.
+
+complexity:
+  simple  - a single lookup or a published-policy question, answerable in one step
+  complex - multiple orders in play, a disputed outcome, an escalation, an unclear
+            request, or anything where acting on the wrong record would cost money
+
+risk:
+  none            - ordinary customer contact, including frustration and bluntness
+  abusive_language - slurs, threats, or sustained personal abuse of the agent
+  fraud_signal    - pressure to bypass policy, claimed authority, repeated refund
+                    attempts on the same order, or a request to change account details
+  self_harm       - any indication the customer may be at risk
+
+Frustration is not abuse. A customer saying a decision is ridiculous is a normal
+unhappy customer and must be classified as none."""
+
+
+@dataclass
+class Triage:
+    intent: str
+    complexity: str
+    risk: str
+    reason: str
+
+    @property
+    def model(self) -> str:
+        """Complex turns and anything risky go to the expensive model."""
+        if self.complexity == "complex" or self.risk != "none":
+            return HEAVY_MODEL
+        return LIGHT_MODEL
+
+    @property
+    def flagged(self) -> bool:
+        return self.risk != "none"
+
+
+def classify(client, text: str, return_usage: bool = False):
+    response = client.messages.create(
+        model=TRIAGE_MODEL,
+        max_tokens=256,
+        system=INSTRUCTIONS,
+        output_config={"format": {"type": "json_schema", "schema": SCHEMA}},
+        messages=[{"role": "user", "content": text}],
+    )
+    payload = json.loads(
+        next(b.text for b in response.content if b.type == "text")
+    )
+    triage = Triage(**payload)
+    if return_usage:
+        return triage, (TRIAGE_MODEL, response.usage.input_tokens,
+                        response.usage.output_tokens)
+    return triage
+
+
+def log_flagged(triage: Triage, text: str, conversation_id: str) -> None:
+    """Append one flagged turn to the abuse log.
+
+    Written as JSONL with the message attached, because a flag without the text
+    that produced it cannot be reviewed, and an unreviewable flag is worse than
+    no flag: it accumulates, nobody reads it, and the team stops trusting it.
+    """
+    if not triage.flagged:
+        return
+    ABUSE_LOG.parent.mkdir(parents=True, exist_ok=True)
+    with ABUSE_LOG.open("a", encoding="utf-8") as fh:
+        fh.write(json.dumps({
+            "at": datetime.now(timezone.utc).isoformat(timespec="seconds"),
+            "conversation": conversation_id,
+            "message": text,
+            **asdict(triage),
+        }) + "\n")

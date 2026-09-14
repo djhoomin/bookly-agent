@@ -69,16 +69,59 @@ ebook, and the wrong call is visible to the customer.
 
 `evals/` ships with the agent rather than after it. The cases assert on
 **outcomes**, not wording: did a refund actually fire, was a human brought in,
-was a state-changing action taken against the wrong order. Four of the six cases
+was a state-changing action taken against the wrong order. Five of the seven cases
 pass only if the agent *refuses* to do something, which is the half that
 containment metrics cannot see.
 
+## Model routing and abuse screening
+
+Every inbound turn is screened first by Claude Haiku 4.5. One call, two jobs: it picks the
+model for that turn, and it flags abusive language or fraud signals. Both want the same cheap
+read of the same text, so splitting them would pay twice.
+
+Measured across the eval suite, 25 API calls, at list prices:
+
+| | Per conversation | 10,000/day | Per year |
+|---|---|---|---|
+| routed | $0.0099 | $99 | **$36,256** |
+| all Opus | $0.0222 | $222 | **$80,900** |
+| saved | **55%** | | **$44,643** |
+
+`python -m bookly.costs measured.json` recomputes this from whatever usage you feed it, so it
+runs against production traffic rather than needing a rewrite.
+
+**Routing is an optimisation, not a safety mechanism.** The classifier called the ambiguous Dune
+request *simple* and sent it to Haiku, which is arguably wrong. It did not matter: `find_orders`
+returned two matches, the gate held, and the agent asked. Correctness lives in the policy
+function and the tool interface, both model-independent, so a triage miss costs a less polished
+reply and never a wrong refund.
+
+Flagged turns append to `abuse_log.jsonl` with the message attached. A flag without the text
+that produced it cannot be reviewed, and an unreviewable flag accumulates until the team stops
+trusting it.
+
+*The same shape, in production elsewhere:* a language-training product I am building with a
+partner uses Mistral's moderation endpoint for this job. Different classifier, same
+architecture: a small model in front deciding what the large one is allowed to be bothered with.
+
 ## What I would change first
 
-**Build the eval set from real transcripts.** These six cases test failures I
-thought of, which is the weakest kind of test. The first week of a real
-deployment would produce the cases that actually matter, and they would not look
-like these. Everything else (retrieval for policy instead of a dict, auth before
-any state change, a goodwill path behind a human) is ordinary engineering. The
-eval set is the thing that decides whether the agent gets better or merely
-changes.
+**Stop testing only the failures I thought of.** Two sources replace them, and they test
+different layers.
+
+**Real transcripts** give the agent's cases. What goes wrong in the first week of a deployment
+never looks like what you invented at a desk, and those cases are the ones that decide whether
+the agent improves or merely changes.
+
+**A public adversarial set** gives the triage classifier a number instead of my opinion.
+`deepset/prompt-injections` is 662 labelled rows under Apache 2.0, binary legitimate-versus-
+injection, and was used to train PromptGuard, so the provenance is good. Caveat worth stating:
+it is mostly German, so `xTRam1/safe-guard-prompt-injection` (~10k rows) is the larger
+English-leaning alternative. Either turns "the screen seems to work" into precision and recall.
+
+Neither covers the domain-specific social engineering that actually threatens a support agent:
+claimed account authority, repeated refund attempts on one order, pressure to change delivery
+details. Those cases have to come from real traffic, which is why the transcripts matter more.
+
+Everything else is ordinary engineering: retrieval instead of a dict for policy text,
+authentication before any state change, and a goodwill path behind a human.
