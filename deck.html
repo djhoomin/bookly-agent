@@ -1,0 +1,275 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Bookly Agent Pitch</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500&family=IBM+Plex+Sans:wght@400;500;600&family=Source+Serif+4:opsz,wght@8..60,400;8..60,600&display=swap">
+<style>
+  :root{
+    --ink:#14171c; --paper:#f6f7f8; --panel:#ffffff; --rule:#dde1e6;
+    --muted:#58616c; --faint:#8b939d;
+    --deny:#a63d2f; --deny-bg:#f7ebe8;
+    --allow:#33674e; --allow-bg:#e9f0ec;
+    --serif:"Source Serif 4",Georgia,serif;
+    --sans:"IBM Plex Sans","Helvetica Neue",Arial,sans-serif;
+    --mono:"IBM Plex Mono",ui-monospace,Menlo,monospace;
+  }
+  *{box-sizing:border-box;margin:0;padding:0}
+  body{background:var(--paper);color:var(--ink);font-family:var(--sans);
+       font-size:15px;line-height:1.5;-webkit-font-smoothing:antialiased;
+       display:flex;flex-direction:column;align-items:center;gap:22px;padding:22px}
+  .slide{width:1160px;height:653px;background:var(--panel);border:1px solid var(--rule);
+         padding:52px 60px;display:flex;flex-direction:column;gap:22px;position:relative;
+         overflow:hidden}
+  .eyebrow{font-family:var(--mono);font-size:11px;letter-spacing:.14em;text-transform:uppercase;
+           color:var(--faint);display:flex;justify-content:space-between;align-items:baseline}
+  h1{font-family:var(--serif);font-size:44px;line-height:1.12;font-weight:600;text-wrap:balance;
+     max-width:22ch}
+  h2{font-family:var(--serif);font-size:31px;line-height:1.18;font-weight:600;text-wrap:balance}
+  .lede{font-family:var(--serif);font-size:20px;line-height:1.45;color:var(--muted);max-width:62ch}
+  p{max-width:68ch;color:var(--muted)}
+  strong{color:var(--ink);font-weight:600}
+  .mono{font-family:var(--mono)}
+  .cols{display:grid;grid-template-columns:1fr 1fr;gap:36px;flex:1;min-height:0}
+  .stack{display:flex;flex-direction:column;gap:13px;min-height:0}
+  .label{font-family:var(--mono);font-size:10.5px;letter-spacing:.13em;text-transform:uppercase;
+         color:var(--faint)}
+  pre{font-family:var(--mono);font-size:12.5px;line-height:1.65;background:#fbfcfc;
+      border:1px solid var(--rule);border-left:3px solid var(--ink);padding:15px 17px;
+      overflow:auto;color:var(--ink);white-space:pre}
+  .flow{display:flex;flex-direction:column;gap:8px}
+  .step{display:grid;grid-template-columns:132px 1fr;gap:16px;align-items:baseline;
+        padding:9px 0;border-bottom:1px solid var(--rule)}
+  .step:last-child{border-bottom:0}
+  .step .k{font-family:var(--mono);font-size:12px;color:var(--ink);font-weight:500}
+  .step .v{font-size:13.5px;color:var(--muted)}
+  .gate{background:var(--deny-bg);border:1px solid #e6cec8;padding:13px 16px}
+  .gate .t{font-family:var(--mono);font-size:11px;letter-spacing:.12em;text-transform:uppercase;
+           color:var(--deny);margin-bottom:5px}
+  .gate p{color:#6d3a30;font-size:13.5px;max-width:none}
+  table{border-collapse:collapse;width:100%;font-size:13px}
+  th{text-align:left;font-family:var(--mono);font-size:10.5px;letter-spacing:.1em;
+     text-transform:uppercase;color:var(--faint);font-weight:400;padding:0 10px 7px 0;
+     border-bottom:1px solid var(--rule)}
+  td{padding:8px 10px 8px 0;border-bottom:1px solid var(--rule);vertical-align:top;
+     color:var(--muted)}
+  td.case{font-family:var(--mono);font-size:12px;color:var(--ink)}
+  .pill{font-family:var(--mono);font-size:10.5px;letter-spacing:.06em;padding:2px 7px;
+        display:inline-block;white-space:nowrap}
+  .pill.deny{background:var(--deny-bg);color:var(--deny)}
+  .pill.allow{background:var(--allow-bg);color:var(--allow)}
+  .trade{border-left:3px solid var(--rule);padding-left:15px}
+  .trade .label{margin-bottom:4px}
+  .foot{position:absolute;left:60px;right:60px;bottom:22px;display:flex;
+        justify-content:space-between;font-family:var(--mono);font-size:10.5px;
+        color:var(--faint);letter-spacing:.06em}
+  .big{font-family:var(--serif);font-size:56px;font-weight:600;line-height:1;
+       font-variant-numeric:tabular-nums}
+  .big .sub{font-family:var(--sans);font-size:13px;font-weight:400;color:var(--muted);
+            letter-spacing:0;display:block;margin-top:7px}
+  @media print{
+    body{background:#fff;padding:0;gap:0}
+    .slide{border:0;break-after:page;page-break-after:always}
+    @page{size:1160px 653px;margin:0}
+  }
+</style>
+</head>
+<body>
+
+<section class="slide">
+  <div class="eyebrow"><span>Bookly support agent</span><span>01 / Thesis</span></div>
+  <h1>Containment is the wrong north star.</h1>
+  <p class="lede">The industry measures the share of tickets closed without a human. That
+  pressure builds agents which confidently do the wrong thing rather than hand over, because
+  an agent that refunds an out-of-window order closes the ticket and scores perfectly.</p>
+  <div class="cols" style="align-items:end">
+    <div class="stack">
+      <span class="label">What I built toward instead</span>
+      <h2>Resolution without harm.</h2>
+      <p>The agent has to prove it knows enough to act <em>before</em> it acts. Two consequences
+      run through every decision that follows: the rules live in code rather than in the prompt,
+      and the clarifying question is a gate rather than a good habit.</p>
+    </div>
+    <div class="stack">
+      <div class="gate">
+        <div class="t">The failure this prevents</div>
+        <p>A customer with two copies of <em>Dune</em> on one account, an ebook and a paperback.
+        One is refundable, one is never refundable. An agent that guesses is right half the time,
+        and the customer sees every miss.</p>
+      </div>
+    </div>
+  </div>
+  <div class="foot"><span>DJ Human</span><span>Decagon · Solutions Engineering</span></div>
+</section>
+
+<section class="slide">
+  <div class="eyebrow"><span>How an inquiry moves</span><span>02 / Architecture</span></div>
+  <h2>Five tools, one gate, no framework.</h2>
+  <div class="cols">
+    <div class="stack">
+      <span class="label">Request path</span>
+      <div class="flow">
+        <div class="step"><span class="k">agent.py</span><span class="v">Orchestration loop.
+          Anthropic SDK called directly, tool-use round trips up to a bounded depth.</span></div>
+        <div class="step"><span class="k">tools.py</span><span class="v">find_orders ·
+          get_order_status · start_return · lookup_policy · escalate_to_human</span></div>
+        <div class="step"><span class="k">policy.py</span><span class="v">Refund eligibility.
+          Deterministic. The model never evaluates it.</span></div>
+        <div class="step"><span class="k">backend.py</span><span class="v">Mocked Bookly orders.
+          Deliberately dumb, so nothing interesting hides here.</span></div>
+      </div>
+      <p style="font-size:13.5px"><strong>Memory</strong> is the conversation history on the
+      <span class="mono">Agent</span> instance. One conversation, one object, no hidden state.</p>
+    </div>
+    <div class="stack">
+      <span class="label">The prompt is short, and that is the evidence</span>
+      <pre>Use tools to find things out. Never state an
+order status, delivery date, refund amount or
+policy from memory: look it up.
+
+Before doing anything that changes state, be
+certain which order you are acting on.
+
+Eligibility is decided by Bookly policy through
+the tools, not by you.</pre>
+      <p style="font-size:13.5px">Everything enforceable moved into code, so what is left is tone
+      and the two things that genuinely are judgement: when to ask, and when to hand over. If a
+      rule ever needs adding here, it has leaked out of <span class="mono">policy.py</span>.</p>
+    </div>
+  </div>
+  <div class="foot"><span>Direct SDK · no agent framework</span><span>02</span></div>
+</section>
+
+<section class="slide">
+  <div class="eyebrow"><span>Key decision</span><span>03 / Policy is code</span></div>
+  <h2>A prompt is a suggestion. A function is a rule.</h2>
+  <div class="cols">
+    <div class="stack">
+      <p>A prompt saying <em>"only refund within 30 days"</em> is advisory. A model being helpful
+      to an angry customer will find a reading of it that permits yes. This returns the same
+      answer whether the customer is polite or furious, and it is testable.</p>
+      <pre>age = (today - order.delivered_on).days
+if age &gt; RETURN_WINDOW_DAYS:
+    return Decision(
+        False, "outside_window",
+        f"Delivered {age} days ago, outside "
+        f"the {RETURN_WINDOW_DAYS}-day window.")</pre>
+      <p style="font-size:13.5px"><span class="mono">start_return</span> calls this itself, so the
+      model reports the verdict and cannot reach around it.</p>
+    </div>
+    <div class="stack">
+      <span class="label">Every refusal has a code, not a mood</span>
+      <table>
+        <tr><th>Order</th><th>Verdict</th><th>Reason</th></tr>
+        <tr><td class="case">BK-10231</td><td><span class="pill allow">allow</span></td>
+            <td>Delivered 5 days ago</td></tr>
+        <tr><td class="case">BK-09988</td><td><span class="pill deny">deny</span></td>
+            <td class="mono" style="font-size:12px">outside_window</td></tr>
+        <tr><td class="case">BK-10250</td><td><span class="pill deny">deny</span></td>
+            <td class="mono" style="font-size:12px">digital_item</td></tr>
+        <tr><td class="case">BK-10244</td><td><span class="pill deny">deny</span></td>
+            <td class="mono" style="font-size:12px">not_yet_delivered</td></tr>
+      </table>
+      <div class="trade">
+        <div class="label">What I traded away</div>
+        <p style="font-size:13.5px">Flexibility. There is no path to a goodwill exception, which a
+        real deployment needs. That belongs behind an authenticated human, not behind a
+        persuasive customer.</p>
+      </div>
+    </div>
+  </div>
+  <div class="foot"><span>policy.py</span><span>03</span></div>
+</section>
+
+<section class="slide">
+  <div class="eyebrow"><span>Key decision</span><span>04 / The gate</span></div>
+  <h2>The clarifying question is a gate, not a behaviour.</h2>
+  <div class="cols">
+    <div class="stack">
+      <p><span class="mono">start_return</span> requires a resolved <span class="mono">order_id</span>.
+      <span class="mono">find_orders</span> returns every match. When there is more than one, the
+      model has nothing it can act on, so it asks.</p>
+      <p>Prompting a model to "ask when unsure" produces something that usually happens. Removing
+      the code path produces something that always does.</p>
+      <pre>&gt; I'd like to return my copy of Dune.
+&gt; ria@example.com
+
+  [tool] find_orders -&gt; found: 2
+         BK-10250  Dune (ebook)
+         BK-10251  Dune (paperback)
+
+&lt; Which one would you like to return?</pre>
+    </div>
+    <div class="stack">
+      <span class="label">Tool calls, observed</span>
+      <table>
+        <tr><th>Scenario</th><th>Calls made</th></tr>
+        <tr><td class="case">ambiguous Dune</td>
+            <td class="mono" style="font-size:12px">find_orders → <em>stop</em></td></tr>
+        <tr><td class="case">eligible return</td>
+            <td class="mono" style="font-size:12px">get_order_status → lookup_policy → start_return</td></tr>
+        <tr><td class="case">blocked, then angry</td>
+            <td class="mono" style="font-size:12px">… start_return → escalate_to_human</td></tr>
+      </table>
+      <p style="font-size:13.5px">On the ambiguous request the agent called exactly one tool and
+      stopped. It had nothing to act on.</p>
+      <div class="trade">
+        <div class="label">What I traded away</div>
+        <p style="font-size:13.5px">One turn of latency on ambiguous requests. Worth it: the
+        alternative is a coin flip between refunding a returnable paperback and a
+        non-returnable ebook.</p>
+      </div>
+    </div>
+  </div>
+  <div class="foot"><span>tools.py</span><span>04</span></div>
+</section>
+
+<section class="slide">
+  <div class="eyebrow"><span>Evidence, and the first thing I would change</span><span>05 / Evals</span></div>
+  <h2>Four of six cases pass only if the agent refuses.</h2>
+  <div class="cols">
+    <div class="stack">
+      <table>
+        <tr><th>Case</th><th>Asserts</th><th></th></tr>
+        <tr><td class="case">outside_window</td><td>no refund fires</td>
+            <td><span class="pill allow">pass</span></td></tr>
+        <tr><td class="case">digital_item</td><td>no refund fires</td>
+            <td><span class="pill allow">pass</span></td></tr>
+        <tr><td class="case">not_yet_delivered</td><td>no refund fires</td>
+            <td><span class="pill allow">pass</span></td></tr>
+        <tr><td class="case">ambiguous_order</td><td>asks, does not guess</td>
+            <td><span class="pill allow">pass</span></td></tr>
+        <tr><td class="case">eligible_return</td><td>refund <em>does</em> fire</td>
+            <td><span class="pill allow">pass</span></td></tr>
+        <tr><td class="case">customer_asks_for_human</td><td>escalation fires</td>
+            <td><span class="pill allow">pass</span></td></tr>
+      </table>
+      <p style="font-size:13.5px">Cases assert on <strong>outcomes</strong>, not wording. Did a
+      refund fire, was a human brought in, was a state-changing action taken against the wrong
+      order. Phrasing is not scored, because phrasing is not what goes wrong.</p>
+    </div>
+    <div class="stack" style="justify-content:space-between">
+      <div class="stack">
+        <div class="big">6 / 6<span class="sub">against claude-opus-5, cold, no retries</span></div>
+        <p style="font-size:13.5px">The eval set ships with the agent rather than after it. An
+        agent optimised for containment would fail four of these and score better on the metric
+        most CX teams report.</p>
+      </div>
+      <div class="gate" style="background:#f4f6f7;border-color:var(--rule)">
+        <div class="t" style="color:var(--ink)">What I would change first</div>
+        <p style="color:var(--muted)">Build the eval set from real transcripts. These six test
+        failures I thought of, which is the weakest kind of test. One week of live traffic would
+        produce the cases that actually matter, and they would not look like these. Retrieval,
+        auth before state changes and a goodwill path are ordinary engineering. The eval set is
+        what decides whether the agent improves or merely changes.</p>
+      </div>
+    </div>
+  </div>
+  <div class="foot"><span>evals/</span><span>05</span></div>
+</section>
+
+</body>
+</html>
