@@ -54,7 +54,7 @@
   th{text-align:left;font-family:var(--mono);font-size:10.5px;letter-spacing:.1em;
      text-transform:uppercase;color:var(--faint);font-weight:400;padding:0 10px 7px 0;
      border-bottom:1px solid var(--rule)}
-  table.dense td{padding:4px 8px 4px 0}
+  table.dense td{padding:3px 8px 3px 0}
   td{padding:8px 10px 8px 0;border-bottom:1px solid var(--rule);vertical-align:top;
      color:var(--muted)}
   td.case{font-family:var(--mono);font-size:12px;color:var(--ink)}
@@ -176,6 +176,8 @@ if age &gt; RETURN_WINDOW_DAYS:
             <td class="mono" style="font-size:12px">digital_item</td></tr>
         <tr><td class="case">BK-10244</td><td><span class="pill deny">deny</span></td>
             <td class="mono" style="font-size:12px">not_yet_delivered</td></tr>
+        <tr><td class="case">BK-10231 <span style="color:var(--muted)">"never came"</span></td><td><span class="pill deny">deny</span></td>
+            <td class="mono" style="font-size:12px">delivery_dispute</td></tr>
       </table>
       <div class="trade">
         <div class="label">What I traded away</div>
@@ -198,13 +200,13 @@ if age &gt; RETURN_WINDOW_DAYS:
       fraud signals a general moderator has no name for.</p>
       <table>
         <tr><th></th><th>Per conversation</th><th>10k/day</th><th>Per year</th></tr>
-        <tr><td class="case">routed</td><td>$0.0099</td><td>$99</td><td>$36,119</td></tr>
-        <tr><td class="case">all&nbsp;Opus</td><td>$0.0254</td><td>$254</td><td>$92,798</td></tr>
-        <tr><td class="case"><strong>saved</strong></td><td><strong>61%</strong></td><td></td>
-            <td><strong>$56,679</strong></td></tr>
+        <tr><td class="case">routed</td><td>$0.0112</td><td>$112</td><td>$40,939</td></tr>
+        <tr><td class="case">all&nbsp;Opus</td><td>$0.0300</td><td>$300</td><td>$109,509</td></tr>
+        <tr><td class="case"><strong>saved</strong></td><td><strong>63%</strong></td><td></td>
+            <td><strong>$68,570</strong></td></tr>
       </table>
-      <p style="font-size:13px">Measured from 63 real API calls across the eval suite, at list
-      prices. Eleven of thirteen conversations never touched Opus: the two that did were the
+      <p style="font-size:13px">Measured from 71 real API calls across the eval suite, at list
+      prices. Twelve of fourteen conversations never touched Opus: the two that did were the
       fraud signal and the threat, because risk routes heavy. An abusive customer costs more,
       and the trace shows it.</p>
     </div>
@@ -235,7 +237,7 @@ if age &gt; RETURN_WINDOW_DAYS:
 
 <section class="slide">
   <div class="eyebrow"><span>Evidence, and what I would change first</span><span>05 / Evals</span></div>
-  <h2>Seven of thirteen cases pass only if the agent refuses or asks.</h2>
+  <h2>Eight of fourteen cases pass only if the agent refuses or asks.</h2>
   <div class="cols">
     <div class="stack">
       <table class="dense" style="font-size:12px">
@@ -262,20 +264,22 @@ if age &gt; RETURN_WINDOW_DAYS:
             <td><span class="pill allow">pass</span></td></tr>
         <tr><td class="case">typo_in_id</td><td>refund fires</td>
             <td><span class="pill allow">pass</span></td></tr>
+        <tr><td class="case">never_received</td><td>delivery_dispute, no refund</td>
+            <td><span class="pill allow">pass</span></td></tr>
         <tr><td class="case">threat_still_served</td><td>flagged 0.65, refund fires</td>
             <td><span class="pill allow">pass</span></td></tr>
         <tr><td class="case">asks_for_human</td><td>escalation fires</td>
             <td><span class="pill allow">pass</span></td></tr>
       </table>
-      <p style="font-size:13px">Cases assert on <strong>outcomes</strong>, not wording. Phrasing
+      <p style="font-size:12px;margin:6px 0 0">Cases assert on <strong>outcomes</strong>, not wording. Phrasing
       is not scored, because phrasing is not what goes wrong.</p>
     </div>
     <div class="stack" style="justify-content:space-between">
       <div class="stack" style="gap:10px">
-        <div class="big" style="font-size:42px">13 / 13<span class="sub">routing on, cold, no
-          retries. Five start with no identifier at all. Five phrasings of five requests, terse
-          to furious, land on the same outcome 25 times of 25. The trace then answers the
-          operating questions with no extra instrumentation: 92% resolved without a human, every eligibility decision
+        <div class="big" style="font-size:42px">14 / 14<span class="sub">routing on, cold, no
+          retries. Five start with no identifier at all. Five phrasings of six requests, terse
+          to furious, land on the same outcome 30 times of 30. The trace then answers the
+          operating questions with no extra instrumentation: 86% resolved without a human, every eligibility decision
           carrying a policy code, <span class="mono">outside_window</span> &times;3,
           <span class="mono">fraud_signal</span> &times;1.</span></div>
       </div>
@@ -291,7 +295,7 @@ if age &gt; RETURN_WINDOW_DAYS:
       </div>
       <div class="trade">
         <div class="label">What I would change first, given a production context</div>
-        <p style="font-size:13px">Build the eval set from real transcripts. These thirteen test
+        <p style="font-size:13px">Build the eval set from real transcripts. These fourteen test
         failures I thought of, which is the weakest kind of test. A public adversarial set such as
         <span class="mono">deepset/prompt-injections</span> (662 rows, Apache 2.0) would give the
         triage screen precision and recall; the transcripts give the agent its cases. Then
@@ -299,7 +303,7 @@ if age &gt; RETURN_WINDOW_DAYS:
       </div>
     </div>
   </div>
-  <div class="foot"><span>evals/ &middot; 13 cases</span><span>05</span></div>
+  <div class="foot"><span>evals/ &middot; 14 cases</span><span>05</span></div>
 </section>
 
 </body>
