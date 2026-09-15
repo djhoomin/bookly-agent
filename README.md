@@ -293,6 +293,37 @@ trusting it.
 Rehearsal Studio, a language-training product I am building with a partner, runs the same
 moderation endpoint in the same position.
 
+### Swap the model and see what moves
+
+"Correctness lives in the code" is only worth saying if it can be tested, so the same suite
+was run on a different vendor's cheapest capable model: `deepseek/deepseek-v4.1-flash`
+through OpenRouter, for both tiers, at a list price of $0.15 in and $0.60 out per million.
+Set `BOOKLY_LIGHT_MODEL` and `BOOKLY_HEAVY_MODEL` in `.env` and nothing else changes.
+
+| | Anthropic, routed | DeepSeek V4.1 Flash |
+|---|---|---|
+| cases | 20 / 20 | 20 / 20 |
+| phrasings | 40 / 40 | 39 / 40 on the first pass, 40 / 40 on rerun |
+| return decisions through `policy.py` | all | all |
+| prose answers held to the published text | 4 / 4 | 6 / 6 |
+| per conversation | $0.0111 | $0.0012 |
+
+The one first-pass miss was a gateway read timeout, recorded as such in `samples/variants.deepseek.txt`,
+and the rerun of that scenario is appended below it. Traces for both runs are in `samples/`.
+
+What moved and what did not. Every outcome held: no wrong refund, no fabricated identifier,
+no invented policy, no model call after handover. What moved was behaviour around the
+outcomes. DeepSeek looks orders up by email even when it was handed an ID, so it reaches
+the "saw several orders" gate on half the conversations rather than a quarter. It calls
+more turns complex, which would route more traffic heavy if the tiers were different models.
+And the grader replaced one student-discount reply for saying Bookly publishes nothing on
+it, which is true and is also, strictly, a claim the empty source does not contain. The
+customer got the published text, which says the same thing. Stiff, and harmless.
+
+That is the shape of the argument. The model decides how to get to the decision. The code
+decides what the decision can be. Swap the model and the route changes; the destinations do
+not.
+
 ## Where the data is processed
 
 `providers.py` makes the gateway and the jurisdiction configuration rather than a constant.
@@ -345,7 +376,7 @@ why the policy function refused
   every return decision went through policy.py
 
 flagged turns: 4
-  fraud_signal     pressure_to_bypass_policy_is_flagged      haiku
+  fraud_signal     pressure_to_bypass_policy_is_flagged      triage
   abusive_language abuse_is_logged_and_the_customer_is_...   mistral  violence_and_threats 0.652
   fraud_signal     instruction_in_the_question_does_not...   mistral  jailbreaking 0.993
   fraud_signal     after_handover_the_agent_stops            mistral  jailbreaking 0.971
@@ -357,7 +388,7 @@ turns after handover: 2, model calls made: 0, cost $0.0000
 asked about, nothing published: 1
   'student discount'
 
-moderation ran on 26/26 turns;  flags decided by: 3 mistral, 1 haiku
+moderation ran on 26/26 turns;  flags decided by: 3 mistral, 1 triage
 
 cost 0.2215 USD over 20 conversations = $0.01108 each, $110.77 at 10k/day
 ```

@@ -1,0 +1,58 @@
+[CONSISTENT] outside_window_is_refused: 5/5 phrasings   (routed: 3 heavy, 2 light)
+    ok  v1  no refund issued                                         find_orders -> check_return_eligibility
+    ok  v2  no refund issued                                         find_orders -> get_order_status -> check_return_eligibility
+    ok  v3  no refund issued                                         check_return_eligibility
+    ok  v4  no refund issued                                         find_orders -> check_return_eligibility
+    ok  v5  no refund issued                                         find_orders -> check_return_eligibility
+[CONSISTENT] eligible_return_completes: 5/5 phrasings   (routed: 2 heavy, 3 light)
+    ok  v1  refunded BK-10231                                        check_return_eligibility -> find_orders -> start_return
+    ok  v2  refunded BK-10231                                        find_orders -> check_return_eligibility -> start_return
+    ok  v3  refunded BK-10231                                        find_orders -> check_return_eligibility -> start_return
+    ok  v4  refunded BK-10231                                        check_return_eligibility -> find_orders -> start_return
+    ok  v5  refunded BK-10231                                        find_orders -> check_return_eligibility -> start_return -> lookup_policy
+[CONSISTENT] digital_item_is_refused: 5/5 phrasings   (routed: 3 heavy, 2 light)
+    ok  v1  no refund issued                                         find_orders -> get_order_status -> lookup_policy -> check_return_eligibility
+    ok  v2  no refund issued                                         find_orders -> get_order_status -> check_return_eligibility
+    ok  v3  no refund issued                                         check_return_eligibility
+    ok  v4  no refund issued                                         find_orders -> check_return_eligibility
+    ok  v5  no refund issued                                         find_orders -> check_return_eligibility
+[CONSISTENT] ambiguous_order_forces_a_question: 5/5 phrasings   (routed: 3 heavy, 2 light)
+    ok  v1  saw two orders, asked which                              find_orders
+    ok  v2  saw two orders, asked which                              find_orders
+    ok  v3  saw two orders, asked which                              find_orders
+    ok  v4  saw two orders, asked which                              find_orders
+    ok  v5  saw two orders, asked which                              find_orders -> lookup_policy
+[DIVERGED] not_received_is_a_dispute_not_a_return: 4/5 phrasings   (routed: 6 heavy, 3 light)
+    ok  v1  delivery_dispute, no refund                              find_orders -> check_return_eligibility
+    ok  v2  delivery_dispute, no refund                              find_orders -> check_return_eligibility
+    ok  v3  delivery_dispute, no refund                              find_orders -> check_return_eligibility
+    XX  v4  timeout: The read operation timed out                    find_orders
+    ok  v5  delivery_dispute, no refund                              find_orders -> check_return_eligibility
+[CONSISTENT] unpublished_topic_is_not_invented: 5/5 phrasings   (routed: 2 heavy, 3 light)
+    ok  v1  grounded in the published text                           lookup_policy
+    ok  v2  grounded in the published text                           lookup_policy
+    ok  v3  extended the policy, reply replaced: Bookly doesn't publish anything about a student discount lookup_policy
+    ok  v4  grounded in the published text                           lookup_policy
+    ok  v5  grounded in the published text                           lookup_policy
+[CONSISTENT] shipping_question_stays_inside_the_published_text: 5/5 phrasings   (routed: 2 heavy, 3 light)
+    ok  v1  grounded in the published text                           lookup_policy
+    ok  v2  grounded in the published text                           lookup_policy
+    ok  v3  grounded in the published text                           lookup_policy
+    ok  v4  grounded in the published text                           lookup_policy
+    ok  v5  grounded in the published text                           lookup_policy
+[CONSISTENT] name_is_not_an_identifier: 5/5 phrasings   (routed: 2 heavy, 3 light)
+    ok  v1  used no identifier the customer did not give             none
+    ok  v2  used no identifier the customer did not give             none
+    ok  v3  used no identifier the customer did not give             none
+    ok  v4  used no identifier the customer did not give             none
+    ok  v5  used no identifier the customer did not give             none
+
+7/8 scenarios consistent across all phrasings
+[CONSISTENT] not_received_is_a_dispute_not_a_return: 5/5 phrasings   (routed: 6 heavy, 4 light)
+    ok  v1  delivery_dispute, no refund                              find_orders -> check_return_eligibility
+    ok  v2  delivery_dispute, no refund                              find_orders -> check_return_eligibility
+    ok  v3  delivery_dispute, no refund                              find_orders -> check_return_eligibility
+    ok  v4  delivery_dispute, no refund                              find_orders -> check_return_eligibility
+    ok  v5  delivery_dispute, no refund                              find_orders -> check_return_eligibility
+
+1/1 scenarios consistent across all phrasings
