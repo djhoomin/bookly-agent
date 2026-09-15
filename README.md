@@ -12,11 +12,16 @@ knows enough to act before it acts.
 ## Run it
 
 ```bash
-python -m venv .venv && .venv/bin/pip install anthropic
+python -m venv .venv && .venv/bin/pip install -r requirements.txt
 export ANTHROPIC_API_KEY=...          # or: ant auth login
 .venv/bin/python -m bookly.cli        # interactive demo
-.venv/bin/python -m evals.run         # the evaluation set
+.venv/bin/python -m evals.run         # the evaluation set, live
+.venv/bin/python -m tests.test_offline   # wiring checks, no key needed
 ```
+
+Live runs write `trace.jsonl`, `abuse_log.jsonl` and `measured.json` in the working
+directory and those are gitignored. The committed reference run is in `samples/`, and
+`analyze` and `costs` read it when no local run exists.
 
 ## Three things to try
 
@@ -31,10 +36,12 @@ export ANTHROPIC_API_KEY=...          # or: ant auth login
 ```
 customer turn
    -> agent.py        orchestration loop, direct Anthropic SDK, no framework
-   -> tools.py        find_orders / get_order_status / start_return /
-                      lookup_policy / escalate_to_human
+   -> tools.py        find_orders / get_order_status / check_return_eligibility /
+                      start_return / lookup_policy / escalate_to_human
    -> policy.py       refund eligibility, as deterministic code
    -> backend.py      mocked Bookly data
+   -> providers.py    which gateway and jurisdiction; openai_bridge.py adapts
+   -> trace.py        one decision record per turn; analyze.py reads it back
 ```
 
 Memory is the conversation history held on the `Agent` instance, which is
@@ -79,15 +86,15 @@ Every inbound turn is screened first by Claude Haiku 4.5. One call, two jobs: it
 model for that turn, and it flags abusive language or fraud signals. Both want the same cheap
 read of the same text, so splitting them would pay twice.
 
-Measured across the eval suite, 25 API calls, at list prices:
+Measured across the eval suite, 24 API calls, at list prices:
 
 | | Per conversation | 10,000/day | Per year |
 |---|---|---|---|
-| routed | $0.0099 | $99 | **$36,256** |
-| all Opus | $0.0222 | $222 | **$80,900** |
-| saved | **55%** | | **$44,643** |
+| routed | $0.0075 | $75 | **$27,376** |
+| all Opus | $0.0212 | $212 | **$77,312** |
+| saved | **65%** | | **$49,936** |
 
-`python -m bookly.costs measured.json` recomputes this from whatever usage you feed it, so it
+`python -m bookly.costs` recomputes this from whatever usage you feed it, so it
 runs against production traffic rather than needing a rewrite.
 
 **Routing is an optimisation, not a safety mechanism.** The classifier called the ambiguous Dune
@@ -127,6 +134,8 @@ exercise asks us to avoid.
 
 `trace.jsonl` records one row per turn, and it records **decisions** rather than events: the
 triage verdict, the policy code, the tools reached for, whether state changed, tokens and cost.
+Every flag is derived from a tool call or its result. None is inferred from the wording of the
+reply, because a refusal that ends in "shall I put you through to someone?" is not a question.
 
 Generic APM cannot help here, because the interesting things are not exceptions. A refund
 correctly refused is a 200 and a cheerful log line, and it is also the most important thing that
@@ -137,15 +146,20 @@ happened that day.
 ```
 resolved without a human              86%   (6/7)
 escalated                             14%   (1/7)
-asked before acting                   57%   (4/7)
+changed state (refund issued)         14%   (1/7)
+asked which order before acting       14%   (1/7)
 
 why the policy function refused
     3  outside_window
+    1  digital_item
+    1  not_yet_delivered
+
+  every return decision went through policy.py
 
 flagged turns: 1
   fraud_signal     pressure_to_bypass_policy_is_flagged
 
-cost 0.0752 USD over 7 conversations = $0.01075 each
+cost 0.0525 USD over 7 conversations = $0.00750 each, $75.00 at 10k/day
 ```
 
 The test for whether the schema is right: can someone answer "why did we refuse 41 refunds last
@@ -166,11 +180,51 @@ reason from customer-facing text. Three things followed:
   in the refusal reasons where they had been invisible
 - the two turns still without a policy code are a disambiguation question and an escalation,
   neither of which is an eligibility decision
-- it got **24% cheaper**, $0.01075 to $0.00817 per conversation, because a direct answer takes
-  fewer round trips than reading prose and reasoning about it
+- it got **24% cheaper** on the accounting in use at the time, $0.01075 to $0.00817 per
+  conversation, because a direct answer takes fewer round trips than reading prose and
+  reasoning about it. The per-turn accounting that replaced it (see below) reads $0.00750.
 
 `analyze.py` now asserts this rather than describing it: a return question answered without
 consulting `policy.py` prints a warning.
+
+## Why you don't one-shot with AI coding tools
+
+This repo was built with Claude Code driving and me reviewing. Before sending it I read it
+again cold, the way a reviewer would, and ran every number this document quoted. The list
+below is what that pass found. Each entry is a claim the README made that the code did not
+keep, and each is fixed in the history.
+
+- **The EU residency path had never been called.** `MODEL_MAP` was written and never wired
+  in, so the agent sent bare model IDs that OpenRouter rejects, and the bridge dropped the
+  structured-output schema the classifier depends on. The most quotable section of this
+  document described code that would have failed on its first request. Every model ID now
+  comes from the provider, the schema is carried across, and `tests/test_offline.py` asserts
+  both against a fake client with no key.
+- **"Asked before acting" was a regex.** The trace set the flag when the reply ended with a
+  question mark. Five of seven conversations were flagged. One was a clarifying question and
+  four were refusals ending in "shall I put you through to someone?". The headline was
+  inflated fivefold, and the analyzer used the same flag to silence its own policy warning.
+  The flag is now derived from the tool result: `find_orders` returned more than one match
+  and nothing acted. It reads 14%, which is the truth.
+- **Cost was cumulative, not per turn.** Turn two of a conversation carried turn one's tokens
+  and dollars, so multi-turn conversations were double counted and the analyzer disagreed with
+  the cost model. They now print the same total.
+- **Three places, three sets of numbers.** README, deck and `measured.json` each carried
+  figures from a different run. The reference run now lives in `samples/`, the tools read it
+  by default, and every figure here comes from it.
+- **Two eval names promised more than they checked.** `is_flagged` never looked at the flag
+  and `forces_a_question` never looked for a question. Both passed on "no refund fired". They
+  now assert what they are named for, and an agent that said "I can't help with that" fails
+  both.
+- **Running out of tool rounds promised a colleague and never raised a ticket.** It now calls
+  `escalate_to_human` like any other handover.
+- A stray CJK character in a docstring, an unused import, no requirements file, and runtime
+  logs committed at the repo root.
+
+None of this was visible from the README, and the README was the best-written part of the
+repo. That is the point. A coding agent produces prose about the code faster than it produces
+the code, and the prose is what a reader sees first. The pass that catches the gap is the one
+where you stop reading the description and run the thing.
 
 ## What I would change first
 
