@@ -9,6 +9,14 @@ produces agents which confidently do the wrong thing rather than hand over. The
 target here is *resolution without harm*, which means the agent has to prove it
 knows enough to act before it acts.
 
+**Where it sits.** Between the scripted bots of the last decade, which decided in code and
+understood nothing, and the autonomous agents of this one, which understand everything and
+decide by prompt. Here the model does what scripted bots never could, which is understand the
+customer, and code does what autonomous agents cannot be trusted with, which is decide. A
+scripted bot hands over when the tree runs out; an autonomous agent hands over when it decides
+to; this one hands over by rule. The seam between the two halves is the design, and every
+decision below is about where exactly it runs.
+
 **The shape is not new.** Banking and insurance have run automated decisions for decades on
 one rule: where risk is low the system decides alone, and where uncertainty passes what the
 business will tolerate a person makes the final call, and the system never pretends otherwise.
