@@ -24,6 +24,8 @@ PRICES = {  # USD per million tokens
     "claude-sonnet-5": {"in": 2.00, "out": 10.00},
     "claude-haiku-4-5": {"in": 1.00, "out": 5.00},
     "mistral-moderation-2603": {"in": MISTRAL_MODERATION_IN, "out": 0.0},
+    # OpenRouter list price, September 2026, for the model-swap run.
+    "deepseek-v4.1-flash": {"in": 0.15, "out": 0.60},
 }
 
 

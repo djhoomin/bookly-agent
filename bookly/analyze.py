@@ -71,7 +71,7 @@ def main() -> int:
         for r in flagged:
             scores = ", ".join(f"{c} {s}" for c, s in (r.get("moderation") or {}).items())
             print(f"  {r['risk']:<16} {r['conversation']:<40} "
-                  f"{r.get('screener') or 'haiku'}  {scores}")
+                  f"{r.get('screener') or 'triage'}  {scores}")
     checked = [r for r in rows if r.get("checked_against_policy")]
     replaced = [r for r in checked if r.get("reply_replaced")]
     if checked:
@@ -92,7 +92,7 @@ def main() -> int:
             print(f"  {t[:70]!r}")
 
     moderated = sum(1 for r in rows if r.get("moderated"))
-    deciders = collections.Counter(r.get("screener") or "haiku" for r in flagged)
+    deciders = collections.Counter(r.get("screener") or "triage" for r in flagged)
     print(f"\nmoderation ran on {moderated}/{len(rows)} turns"
           + (";  flags decided by: " + ", ".join(f"{n} {s}" for s, n in deciders.most_common())
              if deciders else ""))

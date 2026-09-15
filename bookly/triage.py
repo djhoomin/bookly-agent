@@ -87,8 +87,9 @@ class Triage:
     #: reason the model passes, because the model picks a reason to complete the
     #: call and the customer's claim is not the model's to choose.
     claim: str = "none"
-    #: Which classifier decided `risk`: "haiku" or "mistral".
-    screener: str = "haiku"
+    #: Which classifier decided `risk`: "triage" (the routing model, whichever
+    #: it is) or "mistral".
+    screener: str = "triage"
     #: Whether Mistral's moderation endpoint ran on this turn at all.
     moderated: bool = False
     #: Mistral's flagged categories and scores, when it ran.

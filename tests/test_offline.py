@@ -186,13 +186,13 @@ def test_moderation_mapping_ignores_pii_and_keeps_haiku_fraud(monkeypatch=None):
     mod.moderate = lambda text, timeout=10.0: moderation.Moderation("m", {}, 5)
     try:
         t, rows = triage.screen(HaikuFraud(), "x")
-        assert t.risk == "fraud_signal" and t.screener == "haiku" and t.moderated and len(rows) == 2
+        assert t.risk == "fraud_signal" and t.screener == "triage" and t.moderated and len(rows) == 2
         mod.moderate = lambda text, timeout=10.0: moderation.Moderation("m", {"violence_and_threats": 0.8}, 5)
         t, _ = triage.screen(HaikuFraud(), "x")
         assert t.risk == "abusive_language" and t.screener == "mistral" and "mistral:" in t.reason
         mod.moderate = lambda text, timeout=10.0: None
         t, rows = triage.screen(HaikuFraud(), "x")
-        assert t.screener == "haiku" and not t.moderated and len(rows) == 1
+        assert t.screener == "triage" and not t.moderated and len(rows) == 1
     finally:
         mod.moderate = saved
 

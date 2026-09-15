@@ -43,7 +43,7 @@ class TurnTrace:
     intent: str = ""
     complexity: str = ""
     risk: str = ""
-    #: which classifier decided risk: haiku, or mistral when it flagged
+    #: which classifier decided risk: triage (the routing model), or mistral
     screener: str = ""
     #: whether Mistral moderation ran on this turn
     moderated: bool = False

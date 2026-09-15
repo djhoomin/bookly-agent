@@ -74,6 +74,13 @@ class Provider:
     residency: str
 
     def model(self, tier: str) -> str:
+        """The model for a tier. BOOKLY_LIGHT_MODEL / BOOKLY_HEAVY_MODEL override
+        the defaults, which is how the same eval set is run on a different
+        vendor's model: the claim that correctness lives in the code and not
+        in the model is only worth making if it can be tested."""
+        override = os.environ.get(f"BOOKLY_{tier.upper()}_MODEL", "").strip()
+        if override:
+            return override
         key = "openrouter" if self.name.startswith("openrouter") else "anthropic"
         return MODEL_MAP[key][tier]
 

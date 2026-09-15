@@ -155,7 +155,7 @@ function renderTriage(t, model){
   if(!t){ $("triage").innerHTML = `<span class="empty">Routing off: every turn on ${esc(bare(model))}.</span>`; return; }
   // Two screeners, each named, each with what it said. Haiku routes and keeps
   // bookstore fraud; Mistral decides abuse and self-harm when it ran.
-  const haikuRisk = t.screener === "haiku" && t.risk !== "none"
+  const haikuRisk = t.screener !== "mistral" && t.risk !== "none"
     ? `<span class="pill deny">${esc(t.risk)}</span>` : `<span class="pill plain">no fraud signal</span>`;
   const routing = `<div class="who">${esc(bare(META.light||"haiku-4-5"))}<small>routing</small></div>` +
     `<div class="said"><span class="pill triage">${esc(t.intent)}</span><span class="pill triage">${esc(t.complexity)}</span>` +
@@ -163,7 +163,7 @@ function renderTriage(t, model){
     (t.claim && t.claim !== "none" ? `<span class="pill ${t.claim === "not_received" ? "deny" : "plain"}">claim: ${esc(t.claim)}</span>` : "") + `</div>`;
   let mod;
   if(!t.moderated){
-    mod = `<span class="off">did not run, no key. Haiku's risk field stands: ` +
+    mod = `<span class="off">did not run, no key. The triage model's risk field stands: ` +
           (t.risk === "none" ? `none` : esc(t.risk)) + `</span>`;
   } else {
     const flagged = Object.entries(t.moderation||{});

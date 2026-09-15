@@ -224,7 +224,7 @@ class Agent:
         if verdict is not None:
             triage = Triage(intent="other", complexity="simple", risk=verdict.risk,
                             reason=f"after handover; mistral: {verdict.reason or 'clean'}",
-                            screener="mistral" if verdict.risk != "none" else "haiku",
+                            screener="mistral" if verdict.risk != "none" else "triage",
                             moderated=True, moderation=verdict.flagged)
             self.triages.append(triage)
             log_flagged(triage, text, self.conversation_id)
