@@ -12,7 +12,9 @@ usually happens and one that always does.
 
 **The model never decides eligibility, in either direction.** `start_return`
 calls `policy.refund_eligibility` and reports the verdict, so a wrong approval is
-impossible. `check_return_eligibility` is the read-only half: it returns the same
+impossible. Both policy tools require a `reason` from a fixed list, because the
+policy reads it: a non-receipt claim on a delivered order is a delivery dispute
+and there is no code path that refunds one. `check_return_eligibility` is the read-only half: it returns the same
 decision without acting, so there is a cheap authoritative answer for the "can I
 return this" question and no reason to reason from the published prose instead.
 """
@@ -23,9 +25,9 @@ import re
 from typing import Any
 
 from .backend import POLICY_NOTES, find_orders_by_email, get_order
+from .policy import REASONS, refund_eligibility
 
 EMAIL = re.compile(r"^[^@\s]+@[^@\s]+\.[^@\s]+$")
-from .policy import refund_eligibility
 
 TOOLS: list[dict[str, Any]] = [
     {
@@ -56,13 +58,16 @@ TOOLS: list[dict[str, Any]] = [
             "Start a return and refund for one specific order. Requires a resolved "
             "order_id: never guess it, and never call this if the customer has more "
             "than one order that could match. Eligibility is decided by Bookly policy, "
-            "not by you; this tool reports the decision."
+            "not by you; this tool reports the decision. The reason is part of that "
+            "decision: not_received is a delivery dispute, never a return."
         ),
         "input_schema": {
             "type": "object",
             "properties": {
                 "order_id": {"type": "string"},
-                "reason": {"type": "string", "description": "Customer's stated reason"},
+                "reason": {"type": "string", "enum": list(REASONS),
+                           "description": "Why the customer wants a refund. not_received "
+                                          "means they say it never arrived."},
             },
             "required": ["order_id", "reason"],
         },
@@ -70,15 +75,22 @@ TOOLS: list[dict[str, Any]] = [
     {
         "name": "check_return_eligibility",
         "description": (
-            "Ask Bookly policy whether one specific order can be returned, without "
-            "starting anything. Use this whenever a customer asks about returning or "
-            "refunding a specific order. Do not infer the answer from the published "
-            "policy text: that text is a summary for customers, and this is the "
-            "decision."
+            "Ask Bookly policy whether one specific order can be refunded, without "
+            "starting anything. Use this whenever a customer asks about returning, "
+            "refunding, or not having received a specific order, and use it before "
+            "reading anything into the order status yourself. Do not infer the answer "
+            "from the published policy text: that text is a summary for customers, and "
+            "this is the decision. If the customer has not said why, leave reason out; "
+            "do not ask for one just to make this call."
         ),
         "input_schema": {
             "type": "object",
-            "properties": {"order_id": {"type": "string"}},
+            "properties": {
+                "order_id": {"type": "string"},
+                "reason": {"type": "string", "enum": list(REASONS),
+                           "description": "Only if the customer said why. not_received "
+                                          "means they say it never arrived."},
+            },
             "required": ["order_id"],
         },
     },
@@ -125,10 +137,33 @@ class Outcome:
         #: find_orders results with more than one match: the gate firing.
         self.ambiguities: list[dict[str, Any]] = []
         self.calls: list[str] = []
+        #: Every policy code returned this conversation, in order.
+        self.decisions: list[str] = []
+        #: The customer's claim as the screener read it, sticky for the
+        #: conversation. Set by the agent, read by the policy tools. Once a
+        #: customer has said an order never arrived, no later "just refund it"
+        #: turns that into an ordinary return.
+        self.claim: str = "none"
         #: (tool, arguments) in order, so an evaluator can ask not only what
         #: was called but with what: an email the customer never typed is a
         #: fabricated identifier, and only the arguments show it.
         self.invocations: list[tuple[str, dict[str, Any]]] = []
+
+
+def _reason(passed: str, outcome: Outcome) -> tuple[str, dict[str, str]]:
+    """The reason the policy will read, and a note if it differs from what the
+    model passed.
+
+    A non-receipt claim from the customer wins over anything the model chose.
+    No stated reason means an ordinary return: only not_received changes the
+    answer, and it changes it against the customer, so a default cannot be
+    gamed in the customer's favour.
+    """
+    if outcome.claim == "not_received" and passed != "not_received":
+        return "not_received", {"note": (
+            "The customer said this order never arrived, so policy treats this as a "
+            "non-receipt claim regardless of the reason given here.")}
+    return (passed or outcome.claim if outcome.claim in REASONS else passed) or "unwanted", {}
 
 
 def dispatch(name: str, args: dict[str, Any], outcome: Outcome) -> dict[str, Any]:
@@ -175,8 +210,11 @@ def dispatch(name: str, args: dict[str, Any], outcome: Outcome) -> dict[str, Any
         order = get_order(args.get("order_id", ""))
         if not order:
             return {"error": "unknown_order", "note": "No such order ID. Do not guess one."}
-        decision = refund_eligibility(order)
-        payload = {"order_id": order.order_id, "title": order.title, **decision.to_dict()}
+        reason, note = _reason(args.get("reason", ""), outcome)
+        decision = refund_eligibility(order, reason)
+        outcome.decisions.append(decision.code)
+        payload = {"order_id": order.order_id, "title": order.title,
+                   "reason": reason, **decision.to_dict(), **note}
         if decision.allowed:
             outcome.refunds.append(payload)
             payload["confirmation"] = f"RET-{order.order_id[-5:]}"
@@ -186,8 +224,11 @@ def dispatch(name: str, args: dict[str, Any], outcome: Outcome) -> dict[str, Any
         order = get_order(args.get("order_id", ""))
         if not order:
             return {"error": "unknown_order", "note": "No such order ID. Do not guess one."}
-        decision = refund_eligibility(order)
-        return {"order_id": order.order_id, "title": order.title, **decision.to_dict()}
+        reason, note = _reason(args.get("reason", ""), outcome)
+        decision = refund_eligibility(order, reason)
+        outcome.decisions.append(decision.code)
+        return {"order_id": order.order_id, "title": order.title,
+                "reason": reason, **decision.to_dict(), **note}
 
     if name == "lookup_policy":
         topic = args.get("topic", "")

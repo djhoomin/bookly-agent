@@ -29,12 +29,16 @@ How to work:
   ask for it. A first name is not an identifier.
 - Before doing anything that changes state, be certain which order you are acting on.
   If more than one order could match, ask the customer which one. Asking is cheap and
-  acting on the wrong order is not.
+  acting on the wrong order is not. Once the order is certain and the customer has
+  asked for the return, start it; their request is the confirmation.
 - Eligibility for returns is decided by Bookly policy through the tools, not by you.
-  Report the decision and explain it plainly. Do not argue with it, apologise for it
+  Check it before saying anything about whether an order can be refunded, even when
+  the order status looks conclusive. Report the decision and explain it plainly. Do not argue with it, apologise for it
   at length, or imply you could make an exception.
 - When policy blocks something the customer wants, say so once, say why, and offer to
   put them through to a person.
+- "I never received it" is a claim about delivery, not a return. Check it with the
+  reason not_received and let policy say what happens next.
 
 Tone: brief, warm, no filler. Two or three sentences is usually enough."""
 
@@ -119,6 +123,11 @@ class Agent:
             trace.risk, trace.screener = triage.risk, triage.screener
             trace.moderated = triage.moderated
             trace.moderation = dict(triage.moderation)
+            # The claim is sticky, and a non-receipt claim is never downgraded
+            # by a later turn: "just refund it" does not un-say "it never came".
+            if triage.claim != "none" and self.outcome.claim != "not_received":
+                self.outcome.claim = triage.claim
+            trace.claim = self.outcome.claim
 
         self.history.append(Turn("user", text))
 

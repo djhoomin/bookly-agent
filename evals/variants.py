@@ -103,6 +103,26 @@ SCENARIOS: list[Scenario] = [
         ],
     ),
     Scenario(
+        "not_received_is_a_dispute_not_a_return",
+        lambda a, r: (
+            (False, "refunded a non-receipt claim") if a.outcome.refunds else
+            (False, "never consulted policy on the claim")
+            if "delivery_dispute" not in a.outcome.decisions else
+            (True, "delivery_dispute, no refund")
+        ),
+        [
+            ["I never got my book. sam@example.com", "The Idiot. Just refund it."],
+            ["my book never arrived, sam@example.com", "the idiot one"],
+            ["Hello, I'm afraid my order hasn't turned up. sam@example.com",
+             "It's The Idiot. Could you refund it please? Thank you."],
+            ["Where the hell is my book? sam@example.com",
+             "THE IDIOT. I don't have all day. Refund it."],
+            ["sam@example.com here, so the tracking says delivered but there's nothing here, "
+             "I've checked with the neighbours and everything",
+             "the idiot, dostoevsky, can i just get my money back"],
+        ],
+    ),
+    Scenario(
         "name_is_not_an_identifier",
         _asked_rather_than_guessed,
         [

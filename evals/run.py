@@ -6,7 +6,7 @@ import argparse
 import sys
 
 from bookly.agent import Agent
-from evals.cases import CASES
+from evals.cases import CASES, run_case
 
 
 def fatal(exc: Exception) -> bool:
@@ -30,17 +30,14 @@ def main() -> int:
     passed = 0
     for case in cases:
         agent = Agent()
-        replies = []
         try:
-            for turn in case.turns:
-                replies.append(agent.say(turn))
+            ok, note, replies = run_case(agent, case)
         except Exception as exc:  # noqa: BLE001
             print(f"[ERROR] {case.name}: {type(exc).__name__}: {exc}")
             if fatal(exc):
                 print("\nStopping: this will fail every case the same way.", file=sys.stderr)
                 return 3
             continue
-        ok, note = case.check(agent, replies)
         passed += ok
         print(f"[{'PASS' if ok else 'FAIL'}] {case.name}: {note}")
         print(f"         tools: {' -> '.join(agent.outcome.calls) or 'none'}")

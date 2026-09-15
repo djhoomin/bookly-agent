@@ -39,7 +39,8 @@ class FakeOpenAI:
                                '"risk":"none","reason":"r"}')
         if not any(m["role"] == "tool" for m in kw["messages"]):
             fn = types.SimpleNamespace(name="check_return_eligibility",
-                                       arguments=json.dumps({"order_id": "BK-09988"}))
+                                       arguments=json.dumps({"order_id": "BK-09988",
+                                                             "reason": "unwanted"}))
             return _completion(tool_calls=[types.SimpleNamespace(id="call_1", function=fn)])
         return _completion("That one is outside the window.")
 
@@ -192,6 +193,44 @@ def test_moderation_mapping_ignores_pii_and_keeps_haiku_fraud(monkeypatch=None):
         assert t.screener == "haiku" and not t.moderated and len(rows) == 1
     finally:
         mod.moderate = saved
+
+
+def test_not_received_is_never_refunded():
+    from bookly.backend import ORDERS
+    from bookly.policy import refund_eligibility
+    delivered, shipped, ebook = ORDERS["BK-10231"], ORDERS["BK-10244"], ORDERS["BK-10250"]
+    assert refund_eligibility(delivered, "damaged").allowed
+    assert refund_eligibility(delivered, "not_received").code == "delivery_dispute"
+    assert refund_eligibility(shipped, "not_received").code == "in_transit"
+    assert refund_eligibility(ebook, "not_received").code == "delivery_dispute"
+    assert refund_eligibility(delivered, "because").code == "unknown_reason"
+    for o in ORDERS.values():
+        assert not refund_eligibility(o, "not_received").allowed
+
+
+def test_customer_claim_overrides_the_models_reason():
+    from bookly.tools import Outcome, dispatch
+    out = Outcome()
+    out.claim = "not_received"
+    r = dispatch("start_return", {"order_id": "BK-10231", "reason": "unwanted"}, out)
+    assert r["code"] == "delivery_dispute" and r["reason"] == "not_received" and "note" in r
+    assert not out.refunds
+    r = dispatch("check_return_eligibility", {"order_id": "BK-10231"}, out)
+    assert r["code"] == "delivery_dispute"
+    out2 = Outcome()
+    out2.claim = "damaged"
+    r = dispatch("check_return_eligibility", {"order_id": "BK-10231"}, out2)
+    assert r["code"] == "eligible" and r["reason"] == "damaged"
+
+
+def test_start_return_records_the_decision():
+    from bookly.tools import Outcome, dispatch
+    out = Outcome()
+    r = dispatch("start_return", {"order_id": "BK-10231", "reason": "not_received"}, out)
+    assert r["code"] == "delivery_dispute" and not out.refunds
+    r = dispatch("start_return", {"order_id": "BK-10231", "reason": "damaged"}, out)
+    assert r["code"] == "eligible" and len(out.refunds) == 1
+    assert out.decisions == ["delivery_dispute", "eligible"]
 
 
 if __name__ == "__main__":

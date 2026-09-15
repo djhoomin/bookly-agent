@@ -47,6 +47,8 @@ class TurnTrace:
     screener: str = ""
     #: whether Mistral moderation ran on this turn
     moderated: bool = False
+    #: the customer's claim about the order, as read by the screener, sticky
+    claim: str = "none"
     #: Mistral's flagged categories with scores, when it ran
     moderation: dict = field(default_factory=dict)
     model: str = ""

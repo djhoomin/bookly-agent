@@ -43,9 +43,11 @@ SCHEMA = {
         "complexity": {"type": "string", "enum": ["simple", "complex"]},
         "risk": {"type": "string",
                  "enum": ["none", "abusive_language", "fraud_signal", "self_harm"]},
+        "claim": {"type": "string",
+                  "enum": ["none", "not_received", "damaged", "wrong_item", "unwanted"]},
         "reason": {"type": "string"},
     },
-    "required": ["intent", "complexity", "risk", "reason"],
+    "required": ["intent", "complexity", "risk", "claim", "reason"],
     "additionalProperties": False,
 }
 
@@ -63,6 +65,13 @@ risk:
                     attempts on the same order, or a request to change account details
   self_harm       - any indication the customer may be at risk
 
+claim, what the customer says is wrong with an order, from their own words:
+  none          - no claim about an order's condition or arrival
+  not_received  - it has not arrived, is missing, never came, or they ask where it is
+  damaged       - it arrived damaged or faulty
+  wrong_item    - they received something other than what they ordered
+  unwanted      - they have it and do not want it
+
 Frustration is not abuse. A customer saying a decision is ridiculous is a normal
 unhappy customer and must be classified as none."""
 
@@ -73,6 +82,11 @@ class Triage:
     complexity: str
     risk: str
     reason: str
+    #: What the customer says is wrong, read from their words by the screener
+    #: rather than chosen by the resolving model. The tools trust this over the
+    #: reason the model passes, because the model picks a reason to complete the
+    #: call and the customer's claim is not the model's to choose.
+    claim: str = "none"
     #: Which classifier decided `risk`: "haiku" or "mistral".
     screener: str = "haiku"
     #: Whether Mistral's moderation endpoint ran on this turn at all.
@@ -104,7 +118,8 @@ def _parse(raw: str) -> Triage:
     try:
         payload = json.loads(text[start:end + 1])
         return Triage(intent=payload["intent"], complexity=payload["complexity"],
-                      risk=payload["risk"], reason=payload.get("reason", ""))
+                      risk=payload["risk"], reason=payload.get("reason", ""),
+                      claim=payload.get("claim", "none"))
     except (ValueError, KeyError, TypeError):
         return Triage("other", "complex", "none",
                       f"classifier output did not parse: {raw[:80]!r}")

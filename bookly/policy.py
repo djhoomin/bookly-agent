@@ -22,6 +22,13 @@ from .backend import TODAY, Order
 
 RETURN_WINDOW_DAYS = 30
 
+#: Why the customer wants their money back. The policy reads this, because
+#: "I never received it" and "I did not like it" are different claims with
+#: different rules, and a refund function that cannot tell them apart will
+#: refund a non-receipt claim on an order the carrier marks delivered, which
+#: is the most common e-commerce fraud there is.
+REASONS = ("damaged", "unwanted", "wrong_item", "not_received")
+
 
 @dataclass(frozen=True)
 class Decision:
@@ -39,7 +46,8 @@ class Decision:
         }
 
 
-def refund_eligibility(order: Order, today: date | None = None) -> Decision:
+def refund_eligibility(order: Order, reason: str = "unwanted",
+                       today: date | None = None) -> Decision:
     """Decide, deterministically, whether this order can be refunded.
 
     Ordered most-specific first so the reason given to the customer is the
@@ -47,9 +55,29 @@ def refund_eligibility(order: Order, today: date | None = None) -> Decision:
     """
     today = today or TODAY
 
+    if reason not in REASONS:
+        return Decision(False, "unknown_reason",
+                        f"Reason must be one of {', '.join(REASONS)}.")
     if order.status == "cancelled":
         return Decision(False, "already_cancelled",
                         "This order was already cancelled, so there is nothing to refund.")
+
+    if reason == "not_received":
+        # A return means the customer has the item to send back. A non-receipt
+        # claim is a dispute about delivery, and nothing here refunds one.
+        if order.status == "delivered":
+            when = order.delivered_on.isoformat() if order.delivered_on else "an unrecorded date"
+            return Decision(False, "delivery_dispute",
+                            f"The carrier recorded this as delivered on {when}. A non-receipt "
+                            "claim on a delivered order is a delivery dispute: a human agent "
+                            "has to raise a carrier trace before anything is refunded.")
+        if order.status in {"processing", "shipped"}:
+            return Decision(False, "in_transit",
+                            "This order has not been delivered yet, so it is not lost. It can "
+                            "be cancelled while in transit if the customer no longer wants it.")
+        return Decision(False, "delivery_dispute",
+                        "Delivery state is unclear. A human agent needs to check with the carrier.")
+
     if order.digital:
         return Decision(False, "digital_item",
                         "Digital items cannot be returned once downloaded.")

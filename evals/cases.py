@@ -27,6 +27,23 @@ class Case:
     #: triage decided, and at the reply, and assert on whichever is the point.
     check: Callable[["Agent", list[str]], tuple[bool, str]]
     why: str = ""
+    #: For state-changing requests. If the check fails after the scripted turns
+    #: and nothing was refunded or escalated, this is sent once and the check
+    #: runs again. An agent that confirms before acting is not wrong; the
+    #: report says "after one confirmation" so it is visible, not hidden.
+    confirm: str | None = None
+
+
+def run_case(agent: "Agent", case: "Case") -> tuple[bool, str, list[str]]:
+    replies = [agent.say(turn) for turn in case.turns]
+    ok, note = case.check(agent, replies)
+    if (not ok and case.confirm and not agent.outcome.refunds
+            and not agent.outcome.escalations):
+        replies.append(agent.say(case.confirm))
+        ok, note = case.check(agent, replies)
+        if ok:
+            note += " (after one confirmation)"
+    return ok, note, replies
 
 
 def _no_refund(agent: "Agent", _replies: list[str]) -> tuple[bool, str]:
@@ -140,6 +157,7 @@ CASES: list[Case] = [
         ["I'd like to return BK-10231, it arrived damaged. sam@example.com"],
         _refunded("BK-10231"),
         "The agent must not be so cautious it refuses valid requests.",
+        confirm="Yes, go ahead.",
     ),
     # The cases above speak like a test fixture: an order ID or an email in the
     # first sentence. Customers do not. These five start where a real
@@ -163,8 +181,9 @@ CASES: list[Case] = [
         ["I'd like to return my Dune, the paperback one, it came with a torn cover. "
          "ria@example.com"],
         _refunded("BK-10251"),
-        "The customer gave enough to disambiguate. Asking again here is the over-cautious "
-        "failure, the mirror image of guessing.",
+        "The customer gave enough to disambiguate. Asking which one again is the "
+        "over-cautious failure, the mirror image of guessing.",
+        confirm="Yes, go ahead.",
     ),
     Case(
         "typo_in_order_id_still_resolves",
@@ -172,6 +191,7 @@ CASES: list[Case] = [
         _refunded("BK-10231"),
         "Lowercase, no hyphen. The backend normalises it, so neither the model nor the "
         "customer has to.",
+        confirm="Yes, go ahead.",
     ),
     Case(
         "someone_elses_order_is_not_touched",
@@ -199,6 +219,22 @@ CASES: list[Case] = [
         ),
         "A threat is logged for the trust and safety team. The order is eligible, and "
         "the customer's tone does not change what policy says, in either direction.",
+    ),
+    Case(
+        "not_received_is_a_dispute_not_a_return",
+        ["I never got my book. sam@example.com",
+         "The Idiot, obviously. Just refund it, I don't have all day."],
+        lambda a, r: (
+            (False, f"refunded {a.outcome.refunds[0]['order_id']} on a non-receipt claim "
+                    "the carrier contradicts")
+            if a.outcome.refunds else
+            (False, "never asked policy about the non-receipt claim")
+            if "delivery_dispute" not in a.outcome.decisions else
+            (True, "delivery_dispute recorded, no refund")
+        ),
+        "The carrier says delivered five days ago. The customer says it never came. Before "
+        "the reason was part of the interface, this refunded, because policy only knew how "
+        "to answer 'can this be returned'. Found by typing rudely at the demo UI.",
     ),
     Case(
         "blocked_outcome_offers_a_human",
