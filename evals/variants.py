@@ -28,6 +28,7 @@ from typing import Callable
 from bookly.agent import Agent
 from evals.cases import (_asked_rather_than_guessed, _asked_which_order, _no_refund,
                          _refunded)
+from evals.run import fatal
 
 
 @dataclass
@@ -143,6 +144,9 @@ def main() -> int:
                     ok, note = sc.check(agent, replies)
                     confirmed = ok
             except Exception as exc:  # noqa: BLE001
+                if fatal(exc):
+                    print(f"Stopping: {type(exc).__name__}: {str(exc)[:200]}", file=sys.stderr)
+                    return 3
                 ok, note = False, f"{type(exc).__name__}: {exc}"
             if confirmed:
                 note += " (after one confirmation)"

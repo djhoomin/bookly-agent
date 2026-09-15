@@ -19,9 +19,12 @@ return this" question and no reason to reason from the published prose instead.
 
 from __future__ import annotations
 
+import re
 from typing import Any
 
 from .backend import POLICY_NOTES, find_orders_by_email, get_order
+
+EMAIL = re.compile(r"^[^@\s]+@[^@\s]+\.[^@\s]+$")
 from .policy import refund_eligibility
 
 TOOLS: list[dict[str, Any]] = [
@@ -134,7 +137,7 @@ def dispatch(name: str, args: dict[str, Any], outcome: Outcome) -> dict[str, Any
 
     if name == "find_orders":
         email = args.get("email", "")
-        if "@" not in email:
+        if not EMAIL.match(email.strip()):
             # A name is not a lookup key. Say so in the result rather than
             # returning an empty list the model might read as "no orders".
             return {"found": 0, "orders": [],

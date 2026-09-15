@@ -9,6 +9,14 @@ from bookly.agent import Agent
 from evals.cases import CASES
 
 
+def fatal(exc: Exception) -> bool:
+    """Billing and auth failures will fail every case identically. Stop on the
+    first rather than print the same error once per conversation."""
+    text = str(exc).lower()
+    return any(s in text for s in ("credit balance", "authentication", "api key",
+                                   "api_key", "permission"))
+
+
 def main() -> int:
     ap = argparse.ArgumentParser()
     ap.add_argument("--case", help="Run one case by name")
@@ -28,6 +36,9 @@ def main() -> int:
                 replies.append(agent.say(turn))
         except Exception as exc:  # noqa: BLE001
             print(f"[ERROR] {case.name}: {type(exc).__name__}: {exc}")
+            if fatal(exc):
+                print("\nStopping: this will fail every case the same way.", file=sys.stderr)
+                return 3
             continue
         ok, note = case.check(agent, replies)
         passed += ok
