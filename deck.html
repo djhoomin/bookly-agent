@@ -130,9 +130,8 @@
           for every turn. Mistral moderation decides abuse; Haiku keeps bookstore fraud.</span></div>
         <div class="step"><span class="k">agent.py</span><span class="v">Orchestration loop.
           Anthropic SDK called directly, bounded tool-use rounds.</span></div>
-        <div class="step"><span class="k">tools.py</span><span class="v">find_orders &middot;
-          get_order_status &middot; check_return_eligibility &middot; start_return &middot;
-          lookup_policy &middot; escalate_to_human</span></div>
+        <div class="step"><span class="k">tools.py</span><span class="v">Eight tools: two verify, four read the account, one writes, one
+          hands over. Every refusal is in the result.</span></div>
         <div class="step"><span class="k">policy.py</span><span class="v">Refund eligibility.
           Deterministic. The model never evaluates it.</span></div>
         <div class="step"><span class="k">grounding.py</span><span class="v">Prose answers held to the published text they looked up.</span></div>
@@ -154,8 +153,9 @@ find_orders(email) -&gt; every match
       usually happens. Removing the code path produces something that always does. The system
       prompt holds tone and judgement only, under 250 words with no eligibility rule in it, and
       that absence is the evidence: everything enforceable moved into code.</p>
-      <p style="font-size:13px">Once a person owns the conversation, the agent makes no further model
-      call: fixed reply, ticket number, message on the ticket, moderation only. Nothing left to push.</p>
+      <p style="font-size:13px">Account data needs a verified email: a code to the inbox, checked by
+      a tool, and the model never sees the code. An order number is not access. Once a person owns
+      the conversation, the agent makes no further model call. Nothing left to push.</p>
     </div>
   </div>
   <div class="foot"><span>Direct SDK &middot; no agent framework</span><span>02</span></div>
@@ -221,13 +221,13 @@ if age &gt; RETURN_WINDOW_DAYS:
       fraud signals a general moderator has no name for.</p>
       <table>
         <tr><th></th><th>Per conversation</th><th>10k/day</th><th>Per year</th></tr>
-        <tr><td class="case">routed</td><td>$0.0112</td><td>$112</td><td>$40,953</td></tr>
-        <tr><td class="case">all&nbsp;Opus</td><td>$0.0311</td><td>$311</td><td>$113,452</td></tr>
-        <tr><td class="case"><strong>saved</strong></td><td><strong>64%</strong></td><td></td>
-            <td><strong>$72,498</strong></td></tr>
+        <tr><td class="case">routed</td><td>$0.0178</td><td>$178</td><td>$64,986</td></tr>
+        <tr><td class="case">all&nbsp;Opus</td><td>$0.0644</td><td>$643</td><td>$234,872</td></tr>
+        <tr><td class="case"><strong>saved</strong></td><td><strong>72%</strong></td><td></td>
+            <td><strong>$169,886</strong></td></tr>
       </table>
-      <p style="font-size:13px">Measured from 116 real API calls across the eval suite, at list
-      prices. Eighteen of twenty-one conversations never touched Opus: the three that did were the
+      <p style="font-size:13px">Measured from 213 real API calls across the eval suite, at list
+      prices. Twenty of twenty-three conversations never touched Opus: the three that did were the
       fraud signal, the threat and a planted instruction, because risk routes heavy. An abusive customer costs more,
       and the trace shows it.</p>
       <p style="font-size:13px"><strong>Swap the model and the destinations hold.</strong> The same suite on
@@ -262,7 +262,7 @@ if age &gt; RETURN_WINDOW_DAYS:
 
 <section class="slide">
   <div class="eyebrow"><span>Evidence, and what I would change first</span><span>05 / Evals</span></div>
-  <h2>12 of 21 pass only by refusing, asking, holding, or not inventing.</h2>
+  <h2>14 of 23 pass only by refusing, asking, holding, verifying, or not inventing.</h2>
   <div class="cols">
     <div class="stack">
       <table style="font-size:12.5px">
@@ -276,6 +276,9 @@ if age &gt; RETURN_WINDOW_DAYS:
         <tr><td><strong>Acts when it should</strong> <span style="color:var(--muted)">(5)</span><br>
             <span class="mono" style="font-size:11px">eligible_return &middot; title_plus_qualifier &middot; typo_in_id &middot; threat_still_served &middot; asks_for_human</span></td>
             <td>refund or escalation <em>does</em> fire</td><td><span class="pill allow">5/5</span></td></tr>
+        <tr><td><strong>Verifies before reading</strong> <span style="color:var(--muted)">(2)</span><br>
+            <span class="mono" style="font-size:11px">wrong_code &middot; order_number_alone</span></td>
+            <td>no account data read, no refund, without a verified email</td><td><span class="pill allow">2/2</span></td></tr>
         <tr><td><strong>Prose held to the published text</strong> <span style="color:var(--muted)">(6)</span><br>
             <span class="mono" style="font-size:11px">password_reset &middot; shipping_time &middot; student_discount &middot; my_order &middot; follow_up &middot; injected_instruction</span></td>
             <td>looked up, checked by a second model against the text and the tools' data, replaced if it extended the policy</td><td><span class="pill allow">6/6</span></td></tr>
@@ -284,10 +287,10 @@ if age &gt; RETURN_WINDOW_DAYS:
     </div>
     <div class="stack" style="justify-content:space-between">
       <div class="stack" style="gap:10px">
-        <div class="big" style="font-size:42px">21 / 21<span class="sub">routing on, cold, no
+        <div class="big" style="font-size:42px">23 / 23<span class="sub">routing on, cold, no
           retries. Five phrasings of eight requests, terse
           to furious, land on the same outcome 40 times of 40. The trace then answers the
-          operating questions with no extra instrumentation: 86% resolved without a human, every eligibility decision
+          operating questions with no extra instrumentation: 83% resolved without a human, every eligibility decision
           carrying a policy code, <span class="mono">outside_window</span> &times;4,
           <span class="mono">fraud_signal</span> &times;1.</span></div>
       </div>
@@ -302,16 +305,14 @@ if age &gt; RETURN_WINDOW_DAYS:
       </div>
       <div class="trade">
         <div class="label">What I would change first, given a production context</div>
-        <p style="font-size:13px">Build the eval set from real transcripts. The 21 cases are the beers
+        <p style="font-size:13px">Build the eval set from real transcripts. The 23 cases are the beers
         the QA engineer orders. The two holes that would have cost money or embarrassed a customer,
         a refund on "never received" and a true delivery date replaced as invented, were found by a
-        person typing at the UI while every case was green, and became cases afterwards. Invented
-        cases only contain what you already thought of. Then authentication before any state
-        change, and a goodwill path behind a human.</p>
+        person typing at the UI while every case was green, and became cases afterwards. Invented cases only contain what you already thought of. Then real identity, since a code proves an inbox and a session proves a customer, and a goodwill path behind a human.</p>
       </div>
     </div>
   </div>
-  <div class="foot"><span>evals/ &middot; 21 cases</span><span>05</span></div>
+  <div class="foot"><span>evals/ &middot; 23 cases</span><span>05</span></div>
 </section>
 
 </body>

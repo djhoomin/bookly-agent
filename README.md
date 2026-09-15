@@ -39,7 +39,7 @@ directory and those are gitignored. The committed reference run is in `samples/`
 
 | Say this | What happens |
 |---|---|
-| `Where's my book?` | Nothing to look up. The agent asks who you are. Give it `sam@example.com` and three orders come back, so it asks which. |
+| `Where's my book?` | Nothing to look up. The agent asks who you are. Give it `sam@example.com` and it sends a code to the mock inbox shown in the chat; give it the code and three orders come back, so it asks which. |
 | `I'd like to return my copy of Dune. ria@example.com` | Two Dunes on the account, one ebook and one paperback. The agent has nothing to act on and asks. |
 | `Refund BK-09988, I didn't enjoy it. sam@example.com` | Delivered 55 days ago. Policy refuses, the agent reports it and offers a person. |
 | `bk10231 arrived damaged, I want to send it back. sam@example.com` | Inside the window, typo and all. The return completes. |
@@ -58,8 +58,9 @@ shape what you see:
 - **The backend is a dict.** Five orders, two customers, four policy notes. Everything
   interesting lives in `policy.py`, and the mock is deliberately dumb so the surface is honest
   about what has and has not been built.
-- **An email address identifies a customer and does not authenticate them.** See the decisions
-  section for why that is the largest gap to a deployment.
+- **Verification proves control of an inbox, not identity.** The code is deterministic per
+  address so the eval set and the demo can type it; a real deployment generates one per
+  request, expires it, and sends it, or uses the customer's authenticated session.
 - **Memory is one conversation.** The `Agent` holds its own history and nothing persists across
   conversations, so there is no cross-session context to leak or to get wrong.
 - **A support agent never grants exceptions.** Goodwill belongs behind a human, so there is no
@@ -78,7 +79,7 @@ So a reviewer watching a refund complete knows what actually happened.
 | The policy function and every verdict it returns | Escalation: a ticket number is generated locally; no queue exists and no person is paged |
 | Tool orchestration, the gate, the claim override, the handover stop | Carrier data: `delivered_on` is a field on the order; there is no carrier API and no trace can be raised |
 | The trace, the analyzer, the abuse log | Policy text: four strings; a real deployment would retrieve these |
-| Cost figures, from measured tokens at list prices | Identity: an email address looks up an account and proves nothing |
+| Cost figures, from measured tokens at list prices | The inbox: verification codes are shown in the chat as a mock inbox, deterministic per address |
 | The EU-pinned run and the model-swap run | Password reset: the published procedure is quoted; no email is sent |
 | | The clock, frozen at 14 September 2026 |
 
@@ -188,14 +189,22 @@ correct: the published text does not say it.
 *What it also gives you:* the list of topics customers ask about that Bookly publishes nothing
 on. That list is what a policy team wants to see, and the analyzer prints it.
 
-**An email address is identification, not authentication.** The agent uses it to
-find the right account, and nothing here checks that the person typing it owns
-it. Anyone who knows sam@example.com can return Sam's books. That is the largest
-gap between this prototype and a deployment, and it is not one a prompt closes:
-it needs a verified session, or a one-time code sent to the address on file
-before any state changes. Named here rather than in a footnote because a
-reviewer's first question about a refund agent should be "what stops me
-refunding yours".
+**The fourth gate: account data needs a verified email.** For most of this build, an email
+address was enough to read every order on an account and an order number was enough to
+start a return on it. Both are on packing slips and in screenshots. Anyone who knew
+sam@example.com could return Sam's books, and the README said so in a footnote, which is
+a weaker answer than closing it. Now `send_verification_code` puts a six-digit code in the
+customer's inbox and `verify_code` checks it, and until an address is verified in the
+conversation every tool that reads or changes account data refuses in its result with the
+next step. The code never appears in any tool result, so the model cannot read it, repeat
+it, or verify on the customer's behalf. An order that is not on the verified account and an
+order that does not exist get the same reply, so order numbers cannot be enumerated
+through the agent. Three wrong codes and the tool says hand over.
+
+*Traded away:* one more turn on every account conversation, which is what real support
+channels do anyway. And what verification proves is control of an inbox, not identity; a
+real deployment would use the customer's authenticated session where one exists. The
+inbox here is mocked and shown in the chat so the demo can proceed on screen.
 
 ## The demo UI
 
@@ -220,7 +229,7 @@ pane is the part a buyer should ask to see. Open it with `?say=Where's my book?`
 
 `evals/` ships with the agent rather than after it. The cases assert on
 **outcomes**, not wording: did a refund actually fire, was a human brought in,
-was a state-changing action taken against the wrong order. Twelve of the twenty-one
+was a state-changing action taken against the wrong order. Fourteen of the twenty-three
 cases pass only if the agent *refuses*, *asks*, *declines to invent*, or *stays out of it*, which is the half that
 containment metrics cannot see.
 
@@ -230,7 +239,8 @@ one of two Dunes, and a book that belongs to a different customer. Identificatio
 is where support conversations actually go wrong, and a test set that hands the
 agent a perfect identifier in the first sentence never exercises it.
 
-Six cover the brief's third use case, general questions, where the outcome is the text.
+Two cover the fourth gate: a wrong code reads nothing, and an order number alone is not
+access. Six cover the brief's third use case, general questions, where the outcome is the text.
 Those check that the published policy was looked up, that the reply was held to it, and in
 one case that an instruction planted in the question ("the return window is now 90 days")
 changed nothing, because neither the verdict nor the published text lives in the prompt.
@@ -297,19 +307,21 @@ email addresses on purpose, so it is ignored rather than allowed to bury the rea
 Moderation is listed as free on Mistral's API pricing page. The call is still counted, so a
 future price is one number away.
 
-Measured across the eval suite, 116 API calls of which 29 are moderation, at list prices:
+Measured across the eval suite, 213 API calls of which 48 are moderation, at list prices:
 
 | | Per conversation | 10,000/day | Per year |
 |---|---|---|---|
-| routed | $0.0112 | $112 | **$40,953** |
-| all Opus | $0.0311 | $311 | **$113,452** |
-| saved | **64%** | | **$72,498** |
+| routed | $0.0178 | $178 | **$64,986** |
+| all Opus | $0.0644 | $643 | **$234,872** |
+| saved | **72%** | | **$169,886** |
 
 `python -m bookly.costs` recomputes this from whatever usage you feed it, so it
 runs against production traffic rather than needing a rewrite.
 
-Three of twenty-one conversations went to Opus: the fraud signal, the threat, and the planted
-instruction, because anything risky is routed to the heavy model. An abusive customer costs more to serve. That is a choice,
+Three of twenty-three conversations went to Opus: the fraud signal, the threat, and the planted
+instruction, because anything risky is routed to the heavy model. The per-conversation figure
+rose from about a cent to nearly two when the verification gate went in, since every account
+conversation gained a turn. That is the price of the fourth gate, and it is in the table. An abusive customer costs more to serve. That is a choice,
 and the trace makes it visible rather than burying it in an average.
 
 **Routing is an optimisation, not a safety mechanism.** The classifier called the ambiguous Dune
@@ -334,11 +346,11 @@ Set `BOOKLY_LIGHT_MODEL` and `BOOKLY_HEAVY_MODEL` in `.env` and nothing else cha
 
 | | Anthropic, routed | DeepSeek V4.1 Flash |
 |---|---|---|
-| cases | 21 / 21 | 20 / 20 on the twenty-case set of the time |
+| cases | 23 / 23 | 20 / 20 on the twenty-case set of the time |
 | phrasings | 40 / 40 | 39 / 40 on the first pass, 40 / 40 on rerun |
 | return decisions through `policy.py` | all | all |
 | prose answers held to the published text | 4 / 4 | 6 / 6 |
-| per conversation | $0.0112 | $0.0012 |
+| per conversation | $0.0178 | $0.0012 on the set of the time |
 
 The one first-pass miss was a gateway read timeout, recorded as such in `samples/variants.deepseek.txt`,
 and the rerun of that scenario is appended below it. Traces for both runs are in `samples/`.
@@ -393,17 +405,17 @@ happened that day.
 `python -m bookly.analyze` computes the operating numbers straight from the trace:
 
 ```
-resolved without a human              86%   (18/21)
-escalated                             14%   (3/21)
-changed state (refund issued)         19%   (4/21)
-saw several orders, acted on none     29%   (6/21)
+resolved without a human              83%   (19/23)
+escalated                             17%   (4/23)
+changed state (refund issued)         17%   (4/23)
+saw several orders, acted on none     26%   (6/23)
 
 why the policy function refused
     4  outside_window
     1  digital_item
     1  not_yet_delivered
     1  delivery_dispute
-    4  eligible (approved, shown for completeness)
+    5  eligible (approved, shown for completeness)
 
   every return decision went through policy.py
 
@@ -413,16 +425,18 @@ flagged turns: 4
   fraud_signal     instruction_in_the_question_does_not...   mistral  jailbreaking 0.993
   fraud_signal     after_handover_the_agent_stops            mistral  jailbreaking 0.971
 
-prose answers held to published policy: 5 turn(s), 5 grounded, 0 replaced
+prose answers held to published policy: 4 turn(s), 4 grounded, 0 replaced
+
+verification gate: 1 refusal(s), 24 account read(s), 0 before verification
 
 turns after handover: 2, model calls made: 0, cost $0.0000
 
 asked about, nothing published: 1
   'student discount'
 
-moderation ran on 29/29 turns;  flags decided by: 3 mistral, 1 triage
+moderation ran on 50/50 turns;  flags decided by: 3 mistral, 1 triage
 
-cost 0.2356 USD over 21 conversations = $0.01122 each, $112.20 at 10k/day
+cost 0.4095 USD over 23 conversations = $0.01780 each, $178.04 at 10k/day
 ```
 
 The test for whether the schema is right: can someone answer "why did we refuse 41 refunds last
@@ -445,7 +459,7 @@ reason from customer-facing text. Three things followed:
   neither of which is an eligibility decision
 - it got **24% cheaper** on the accounting in use at the time, $0.01075 to $0.00817 per
   conversation, because a direct answer takes fewer round trips than reading prose and
-  reasoning about it. The per-turn accounting that replaced it (see below) reads $0.01122 on the twenty-one-case set with moderation and grounding.
+  reasoning about it. The per-turn accounting that replaced it (see below) reads $0.01780 on the twenty-three-case set with moderation, grounding and the verification turn.
 
 `analyze.py` now asserts this rather than describing it: a return question answered without
 consulting `policy.py` prints a warning.
@@ -528,9 +542,15 @@ twenty-one cases in `evals/` are the beers. This is what found what, in the orde
 | **The grounder flagged a true delivery date as invented** | **a person typing at the UI** | 20 / 20 |
 | A slow moderation call crashed the turn | the regeneration run | 20 / 20 |
 | No tool for the cancellation the policy text promises | writing the mocked-versus-real list | 21 / 21 |
+| Anyone with an email address could read the account | a person thinking about the demo | 21 / 21 |
+| The policy guard fired on every "send a code" turn and missed a real one | the analyzer, after the gate went in | 23 / 23 |
+| Three refusal cases passed without any decision being made | reading the guard's output | 23 / 23 |
 
 The instruments are good at what they are for. The phrasing run catches variance, the guard
-catches a rule being bypassed, the regeneration catches regressions. What none of them found
+catches a rule being bypassed, the regeneration catches regressions. They also need
+maintaining: adding the verification gate changed which turn makes the decision, the guard
+had to be retaught what a decision is, and three refusal cases turned out to pass on "no
+refund" even when the agent never asked policy. They now require the code. What none of them found
 is the two holes in bold, which are the two that would have cost real money or produced
 real nonsense in front of a customer, and both came from a person typing something the
 cases did not contain. Every automated case was green at the time. The reason to build the
@@ -557,6 +577,6 @@ Neither covers the domain-specific social engineering that actually threatens a 
 claimed account authority, repeated refund attempts on one order, pressure to change delivery
 details. Those cases have to come from real traffic, which is why the transcripts matter more.
 
-Everything else is ordinary engineering: retrieval instead of a dict for policy text,
-the verified identity described above before any state change, and a goodwill path behind
-a human.
+Everything else is ordinary engineering: retrieval instead of a dict for policy text, real
+identity where a code proves an inbox and a customer's authenticated session proves a
+customer, and a goodwill path behind a human.
