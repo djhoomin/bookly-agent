@@ -15,11 +15,6 @@ calls `policy.refund_eligibility` and reports the verdict, so a wrong approval i
 impossible. `check_return_eligibility` is the read-only half: it returns the same
 decision without acting, so there is a cheap authoritative answer for the "can I
 return this" question and no reason to reason from the published prose instead.
-
-That second tool exists because the trace caught its absence. Without it, four of
-eight turns refused customers after reading `lookup_policy` and deciding for
-themselves: correct answers, arrived at the wrong way, with no policy code
-recorded. The gate sealed wrong approvals and left wrong refusals open.
 """
 
 from __future__ import annotations
@@ -117,12 +112,15 @@ TOOLS: list[dict[str, Any]] = [
     },
 ]
 
-#: Set by the runtime when a return actually completes or an escalation fires,
-#: so the evaluator can assert on outcomes rather than on wording.
+#: Set by the runtime when a return actually completes, an escalation fires, or
+#: a lookup comes back ambiguous, so the evaluator and the trace can assert on
+#: what happened rather than on how the reply was worded.
 class Outcome:
     def __init__(self) -> None:
         self.refunds: list[dict[str, Any]] = []
         self.escalations: list[dict[str, Any]] = []
+        #: find_orders results with more than one match: the gate firing.
+        self.ambiguities: list[dict[str, Any]] = []
         self.calls: list[str] = []
 
 
@@ -134,6 +132,9 @@ def dispatch(name: str, args: dict[str, Any], outcome: Outcome) -> dict[str, Any
         if not orders:
             return {"found": 0, "orders": [],
                     "note": "No orders on that email. Check the address, or escalate."}
+        if len(orders) > 1:
+            outcome.ambiguities.append({"email": args.get("email", ""),
+                                        "candidates": [o.order_id for o in orders]})
         return {
             "found": len(orders),
             "orders": [

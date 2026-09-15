@@ -1,3 +1,8 @@
 .venv/
 __pycache__/
 *.pyc
+
+# Local runs. The committed reference run lives in samples/.
+/trace.jsonl
+/abuse_log.jsonl
+/measured.json

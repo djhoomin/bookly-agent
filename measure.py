@@ -6,12 +6,12 @@ from evals.cases import CASES
 rows, n = [], 0
 for case in CASES:
     agent = Agent(conversation_id=case.name)
-    for turn in case.turns:
-        agent.say(turn)
+    replies = [agent.say(turn) for turn in case.turns]
     rows.extend(agent.usage)
     n += 1
-    ok, note = case.check(agent.outcome, [])
-    heavy = {m for r, m, _i, _o in agent.usage if r == "resolve" and m != "claude-haiku-4-5"}
+    ok, note = case.check(agent, replies)
+    light = agent.provider.model("light")
+    heavy = {m for r, m, _i, _o in agent.usage if r == "resolve" and m != light}
     print(f"[{'PASS' if ok else 'FAIL'}] {case.name}: {note}"
           f"  (heavy: {heavy or 'no'})")
 

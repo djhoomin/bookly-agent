@@ -27,6 +27,8 @@ from pathlib import Path
 from typing import Any
 
 TRACE_LOG = Path(os.environ.get("BOOKLY_TRACE_LOG", "trace.jsonl"))
+#: The committed reference run, read when no local trace exists yet.
+SAMPLE_TRACE = Path(__file__).resolve().parent.parent / "samples" / "trace.jsonl"
 
 
 @dataclass
@@ -42,13 +44,16 @@ class TurnTrace:
     complexity: str = ""
     risk: str = ""
     model: str = ""
-    # what the agent did
+    # what the agent did. Every flag here is derived from tool calls and their
+    # results, never from the wording of the reply: a refusal that ends in
+    # "shall I put you through to someone?" is not a clarifying question.
     tools: list[str] = field(default_factory=list)
     policy_codes: list[str] = field(default_factory=list)
     state_changed: bool = False
     escalated: bool = False
-    asked_clarifying: bool = False
-    # what it cost
+    #: find_orders returned more than one match and nothing acted: the gate held.
+    asked_which_order: bool = False
+    # what it cost, this turn only, triage call included
     tokens_in: int = 0
     tokens_out: int = 0
     usd: float = 0.0
@@ -61,8 +66,12 @@ class TurnTrace:
             fh.write(json.dumps(asdict(self)) + "\n")
 
 
-def load(path: Path | None = None) -> list[dict[str, Any]]:
+def load(path: Path | None = None) -> tuple[list[dict[str, Any]], Path]:
+    """Return the rows and the file they came from."""
     path = path or TRACE_LOG
+    if not path.exists() and SAMPLE_TRACE.exists():
+        path = SAMPLE_TRACE
     if not path.exists():
-        return []
-    return [json.loads(line) for line in path.read_text().splitlines() if line.strip()]
+        return [], path
+    rows = [json.loads(line) for line in path.read_text().splitlines() if line.strip()]
+    return rows, path

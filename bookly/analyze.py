@@ -16,10 +16,11 @@ from .trace import load
 
 
 def main() -> int:
-    rows = load()
+    rows, source = load()
     if not rows:
         print("No trace yet. Run the eval suite or demo.py first.")
         return 1
+    print(f"reading {source}")
 
     convs = collections.defaultdict(list)
     for r in rows:
@@ -28,7 +29,7 @@ def main() -> int:
 
     escalated = sum(1 for turns in convs.values() if any(t["escalated"] for t in turns))
     changed = sum(1 for turns in convs.values() if any(t["state_changed"] for t in turns))
-    asked = sum(1 for turns in convs.values() if any(t["asked_clarifying"] for t in turns))
+    asked = sum(1 for turns in convs.values() if any(t["asked_which_order"] for t in turns))
     flagged = [r for r in rows if r["risk"] != "none"]
     usd = sum(r["usd"] for r in rows)
 
@@ -37,7 +38,7 @@ def main() -> int:
           f"({n-escalated}/{n})")
     print(f"{'escalated':<34}{escalated/n:>7.0%}   ({escalated}/{n})")
     print(f"{'changed state (refund issued)':<34}{changed/n:>7.0%}   ({changed}/{n})")
-    print(f"{'asked before acting':<34}{asked/n:>7.0%}   ({asked}/{n})")
+    print(f"{'asked which order before acting':<34}{asked/n:>7.0%}   ({asked}/{n})")
 
     codes = collections.Counter(c for r in rows for c in r["policy_codes"])
     refusals = {c: n for c, n in codes.items() if c != "eligible"}
@@ -54,7 +55,7 @@ def main() -> int:
     # which order, or handing over to a person, are not eligibility decisions.
     unchecked = [r for r in rows
                  if r["intent"] == "return_refund" and not r["policy_codes"]
-                 and not r["asked_clarifying"]]
+                 and not r["asked_which_order"] and not r["escalated"]]
     if unchecked:
         print(f"\n  WARNING: {len(unchecked)} return question(s) answered without "
               f"consulting policy.py:")

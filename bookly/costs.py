@@ -11,8 +11,9 @@ from __future__ import annotations
 import json
 import sys
 from collections import defaultdict
+from pathlib import Path
 
-TRIAGE = "claude-haiku-4-5"
+SAMPLE = Path(__file__).resolve().parent.parent / "samples" / "measured.json"
 
 PRICES = {  # USD per million tokens
     "claude-opus-5":   {"in": 5.00, "out": 25.00},
@@ -22,7 +23,7 @@ PRICES = {  # USD per million tokens
 
 
 def cost(model: str, tin: int, tout: int) -> float:
-    p = PRICES[model]
+    p = PRICES[model.split("/")[-1]]  # gateways namespace by vendor
     return tin / 1e6 * p["in"] + tout / 1e6 * p["out"]
 
 
@@ -61,5 +62,8 @@ def report(rows: list[tuple[str, str, int, int]], conversations: int,
 
 if __name__ == "__main__":
     path = sys.argv[1] if len(sys.argv) > 1 else "measured.json"
+    if not Path(path).exists() and len(sys.argv) == 1:
+        path = SAMPLE
+    print(f"reading {path}")
     data = json.load(open(path))
     report([tuple(r) for r in data["rows"]], data["conversations"])
