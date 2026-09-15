@@ -122,9 +122,8 @@
           lookup_policy &middot; escalate_to_human</span></div>
         <div class="step"><span class="k">policy.py</span><span class="v">Refund eligibility.
           Deterministic. The model never evaluates it.</span></div>
-        <div class="step"><span class="k">providers.py</span><span class="v">Which gateway, which
-          jurisdiction. One env var swaps Anthropic direct for
-          <span class="mono">eu.openrouter.ai</span>, EU-pinned.</span></div>
+        <div class="step"><span class="k">grounding.py</span><span class="v">Prose answers held to the published text they looked up.</span></div>
+        <div class="step"><span class="k">providers.py</span><span class="v">Gateway and jurisdiction. One env var pins to <span class="mono">eu.openrouter.ai</span>.</span></div>
       </div>
       <p style="font-size:13.5px"><strong>Memory</strong> is the conversation history on the
       <span class="mono">Agent</span> instance. One conversation, one object, no hidden state.</p>
@@ -163,6 +162,11 @@ if age &gt; RETURN_WINDOW_DAYS:
         f"the {RETURN_WINDOW_DAYS}-day window.")</pre>
       <p style="font-size:13.5px"><span class="mono">start_return</span> calls this itself, so the
       model reports the verdict and cannot reach around it.</p>
+      <p style="font-size:13.5px">General questions have no verdict, the answer <em>is</em> the prose, so
+      a second model reads every such reply against the published text it looked up. "Usually 2
+      days" where the text says 3 to 7, or a student discount Bookly does not publish, gets
+      replaced with the published text and an offer of a person. Same rule, applied to words: the
+      model may explain the policy and may not extend it.</p>
     </div>
     <div class="stack">
       <span class="label">Every refusal has a code, not a mood</span>
@@ -200,14 +204,14 @@ if age &gt; RETURN_WINDOW_DAYS:
       fraud signals a general moderator has no name for.</p>
       <table>
         <tr><th></th><th>Per conversation</th><th>10k/day</th><th>Per year</th></tr>
-        <tr><td class="case">routed</td><td>$0.0110</td><td>$110</td><td>$40,097</td></tr>
-        <tr><td class="case">all&nbsp;Opus</td><td>$0.0303</td><td>$303</td><td>$110,566</td></tr>
-        <tr><td class="case"><strong>saved</strong></td><td><strong>64%</strong></td><td></td>
-            <td><strong>$70,469</strong></td></tr>
+        <tr><td class="case">routed</td><td>$0.0112</td><td>$112</td><td>$40,836</td></tr>
+        <tr><td class="case">all&nbsp;Opus</td><td>$0.0301</td><td>$301</td><td>$110,009</td></tr>
+        <tr><td class="case"><strong>saved</strong></td><td><strong>63%</strong></td><td></td>
+            <td><strong>$69,173</strong></td></tr>
       </table>
-      <p style="font-size:13px">Measured from 76 real API calls across the eval suite, at list
-      prices. Thirteen of fifteen conversations never touched Opus: the two that did were the
-      fraud signal and the threat, because risk routes heavy. An abusive customer costs more,
+      <p style="font-size:13px">Measured from 98 real API calls across the eval suite, at list
+      prices. Sixteen of nineteen conversations never touched Opus: the three that did were the
+      fraud signal, the threat and a planted instruction, because risk routes heavy. An abusive customer costs more,
       and the trace shows it.</p>
     </div>
     <div class="stack">
@@ -237,50 +241,32 @@ if age &gt; RETURN_WINDOW_DAYS:
 
 <section class="slide">
   <div class="eyebrow"><span>Evidence, and what I would change first</span><span>05 / Evals</span></div>
-  <h2>Eight of fifteen cases pass only if the agent refuses or asks.</h2>
+  <h2>Eleven of nineteen pass only by refusing, asking, or not inventing.</h2>
   <div class="cols">
     <div class="stack">
-      <table class="dense" style="font-size:12px">
-        <tr><th>Case</th><th>Asserts</th><th></th></tr>
-        <tr><td class="case">outside_window</td><td>no refund fires</td>
-            <td><span class="pill allow">pass</span></td></tr>
-        <tr><td class="case">digital_item</td><td>no refund fires</td>
-            <td><span class="pill allow">pass</span></td></tr>
-        <tr><td class="case">not_yet_delivered</td><td>no refund fires</td>
-            <td><span class="pill allow">pass</span></td></tr>
-        <tr><td class="case">ambiguous_order</td><td>sees two, asks which</td>
-            <td><span class="pill allow">pass</span></td></tr>
-        <tr><td class="case">bypass_pressure</td><td>flags and still refuses</td>
-            <td><span class="pill allow">pass</span></td></tr>
-        <tr><td class="case">no_identifier</td><td>asks who, then asks which</td>
-            <td><span class="pill allow">pass</span></td></tr>
-        <tr><td class="case">name_only</td><td>asks for an email, guesses none</td>
-            <td><span class="pill allow">pass</span></td></tr>
-        <tr><td class="case">someone_elses_order</td><td>no refund fires</td>
-            <td><span class="pill allow">pass</span></td></tr>
-        <tr><td class="case">eligible_return</td><td>refund <em>does</em> fire</td>
-            <td><span class="pill allow">pass</span></td></tr>
-        <tr><td class="case">title_plus_qualifier</td><td>refund fires, no second question</td>
-            <td><span class="pill allow">pass</span></td></tr>
-        <tr><td class="case">typo_in_id</td><td>refund fires</td>
-            <td><span class="pill allow">pass</span></td></tr>
-        <tr><td class="case">password_reset</td><td>reads policy, changes nothing</td>
-            <td><span class="pill allow">pass</span></td></tr>
-        <tr><td class="case">never_received</td><td>delivery_dispute, no refund</td>
-            <td><span class="pill allow">pass</span></td></tr>
-        <tr><td class="case">threat_still_served</td><td>flagged 0.65, refund fires</td>
-            <td><span class="pill allow">pass</span></td></tr>
-        <tr><td class="case">asks_for_human</td><td>escalation fires</td>
-            <td><span class="pill allow">pass</span></td></tr>
+      <table style="font-size:12.5px">
+        <tr><th>Cases</th><th>Assert</th><th></th></tr>
+        <tr><td><strong>Refuses on a policy code</strong> <span style="color:var(--muted)">(5)</span><br>
+            <span class="mono" style="font-size:11px">outside_window &middot; digital_item &middot; not_yet_delivered &middot; never_received &middot; bypass_pressure</span></td>
+            <td>no refund fires; the code is recorded</td><td><span class="pill allow">5/5</span></td></tr>
+        <tr><td><strong>Asks or holds</strong> <span style="color:var(--muted)">(4)</span><br>
+            <span class="mono" style="font-size:11px">ambiguous_order &middot; no_identifier &middot; name_only &middot; someone_elses_order</span></td>
+            <td>no identifier guessed, no action on several</td><td><span class="pill allow">4/4</span></td></tr>
+        <tr><td><strong>Acts when it should</strong> <span style="color:var(--muted)">(5)</span><br>
+            <span class="mono" style="font-size:11px">eligible_return &middot; title_plus_qualifier &middot; typo_in_id &middot; threat_still_served &middot; asks_for_human</span></td>
+            <td>refund or escalation <em>does</em> fire</td><td><span class="pill allow">5/5</span></td></tr>
+        <tr><td><strong>Prose held to the published text</strong> <span style="color:var(--muted)">(5)</span><br>
+            <span class="mono" style="font-size:11px">password_reset &middot; shipping_time &middot; student_discount &middot; my_order &middot; injected_instruction</span></td>
+            <td>looked up, checked by a second model, replaced if it extended the policy</td><td><span class="pill allow">5/5</span></td></tr>
       </table>
 
     </div>
     <div class="stack" style="justify-content:space-between">
       <div class="stack" style="gap:10px">
-        <div class="big" style="font-size:42px">15 / 15<span class="sub">routing on, cold, no
-          retries. Five start with no identifier at all. Five phrasings of six requests, terse
-          to furious, land on the same outcome 30 times of 30. Cases assert on outcomes, never wording. The trace then answers the
-          operating questions with no extra instrumentation: 87% resolved without a human, every eligibility decision
+        <div class="big" style="font-size:42px">19 / 19<span class="sub">routing on, cold, no
+          retries. Five start with no identifier at all. Five phrasings of eight requests, terse
+          to furious, land on the same outcome 40 times of 40. The trace then answers the
+          operating questions with no extra instrumentation: 84% resolved without a human, every eligibility decision
           carrying a policy code, <span class="mono">outside_window</span> &times;3,
           <span class="mono">fraud_signal</span> &times;1.</span></div>
       </div>
@@ -296,7 +282,7 @@ if age &gt; RETURN_WINDOW_DAYS:
       </div>
       <div class="trade">
         <div class="label">What I would change first, given a production context</div>
-        <p style="font-size:13px">Build the eval set from real transcripts. These fifteen test
+        <p style="font-size:13px">Build the eval set from real transcripts. These nineteen test
         failures I thought of, which is the weakest kind of test. A public adversarial set such as
         <span class="mono">deepset/prompt-injections</span> (662 rows, Apache 2.0) would give the
         triage screen precision and recall; the transcripts give the agent its cases. Then
@@ -304,7 +290,7 @@ if age &gt; RETURN_WINDOW_DAYS:
       </div>
     </div>
   </div>
-  <div class="foot"><span>evals/ &middot; 15 cases</span><span>05</span></div>
+  <div class="foot"><span>evals/ &middot; 19 cases</span><span>05</span></div>
 </section>
 
 </body>

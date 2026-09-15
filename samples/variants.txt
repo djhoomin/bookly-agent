@@ -6,13 +6,13 @@
     ok  v5  no refund issued                                         check_return_eligibility
 [CONSISTENT] eligible_return_completes: 5/5 phrasings   (routed: 6 light)
     ok  v1  refunded BK-10231                                        check_return_eligibility -> start_return
-    ok  v2  refunded BK-10231                                        start_return
+    ok  v2  refunded BK-10231                                        check_return_eligibility -> start_return
     ok  v3  refunded BK-10231 (after one confirmation)               check_return_eligibility -> start_return
     ok  v4  refunded BK-10231                                        check_return_eligibility -> start_return
     ok  v5  refunded BK-10231                                        check_return_eligibility -> start_return
 [CONSISTENT] digital_item_is_refused: 5/5 phrasings   (routed: 5 light)
     ok  v1  no refund issued                                         check_return_eligibility
-    ok  v2  no refund issued                                         get_order_status -> check_return_eligibility
+    ok  v2  no refund issued                                         check_return_eligibility
     ok  v3  no refund issued                                         check_return_eligibility
     ok  v4  no refund issued                                         check_return_eligibility
     ok  v5  no refund issued                                         check_return_eligibility
@@ -28,6 +28,18 @@
     ok  v3  delivery_dispute, no refund                              find_orders -> check_return_eligibility -> escalate_to_human
     ok  v4  delivery_dispute, no refund                              find_orders -> check_return_eligibility -> escalate_to_human
     ok  v5  delivery_dispute, no refund                              find_orders -> check_return_eligibility -> escalate_to_human
+[CONSISTENT] unpublished_topic_is_not_invented: 5/5 phrasings   (routed: 5 light)
+    ok  v1  grounded in the published text                           lookup_policy
+    ok  v2  grounded in the published text                           lookup_policy
+    ok  v3  grounded in the published text (handed to a person)      lookup_policy -> escalate_to_human
+    ok  v4  grounded in the published text (handed to a person)      lookup_policy -> escalate_to_human
+    ok  v5  grounded in the published text (handed to a person)      lookup_policy -> lookup_policy -> escalate_to_human
+[CONSISTENT] shipping_question_stays_inside_the_published_text: 5/5 phrasings   (routed: 5 light)
+    ok  v1  grounded in the published text                           lookup_policy
+    ok  v2  grounded in the published text                           lookup_policy
+    ok  v3  grounded in the published text                           lookup_policy
+    ok  v4  extended the policy, reply replaced: Bookly offers expedited options lookup_policy
+    ok  v5  grounded in the published text                           lookup_policy
 [CONSISTENT] name_is_not_an_identifier: 5/5 phrasings   (routed: 5 light)
     ok  v1  used no identifier the customer did not give             none
     ok  v2  used no identifier the customer did not give             none
@@ -35,4 +47,4 @@
     ok  v4  used no identifier the customer did not give             none
     ok  v5  used no identifier the customer did not give             none
 
-6/6 scenarios consistent across all phrasings
+8/8 scenarios consistent across all phrasings
