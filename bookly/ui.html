@@ -33,9 +33,14 @@
   .notice.handed{background:var(--triage-bg);color:var(--triage)}
   .notice.handed b{color:var(--triage)}
   .log{overflow:auto;padding:22px 22px 8px;display:flex;flex-direction:column;gap:12px}
-  .msg{max-width:78%;padding:10px 14px;border-radius:10px;white-space:pre-wrap}
+  .msg{max-width:78%;padding:10px 14px;border-radius:10px}
+  .msg.you{white-space:pre-wrap}
   .msg.you{align-self:flex-end;background:var(--you)}
   .msg.bot{align-self:flex-start;background:var(--panel);border:1px solid var(--rule)}
+  .msg ul{margin:6px 0 0;padding-left:20px}
+  .msg li{margin:2px 0}
+  .msg code{font:12.5px var(--mono);background:var(--you);padding:1px 4px;border-radius:3px}
+  .msg.bot code{background:var(--paper)}
   .msg .who{display:block;font:10.5px/1 var(--mono);letter-spacing:.08em;text-transform:uppercase;color:var(--muted);margin-bottom:6px}
   .msg.err{align-self:stretch;background:var(--deny-bg);color:var(--deny);font-family:var(--mono);font-size:12px}
   .chips{display:flex;flex-wrap:wrap;gap:6px;padding:8px 22px;border-top:1px solid var(--rule)}
@@ -129,6 +134,24 @@ const $ = id => document.getElementById(id);
 const esc = s => String(s ?? "").replace(/[&<>"]/g, c => ({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;"}[c]));
 let session = null, busy = false, META = {};
 
+// The model writes light markdown: bold, italics, inline code, bullets. Render
+// exactly that and nothing else, after escaping, so a customer cannot inject
+// markup and a raw asterisk never reaches the screen.
+function md(text){
+  const lines = esc(text).split("\n");
+  let out = "", inList = false;
+  for(const raw of lines){
+    const line = raw.replace(/\*\*(.+?)\*\*/g, "<strong>$1</strong>")
+                    .replace(/(^|[^*\w])\*(\S(?:[^*\n]*?\S)?)\*(?![*\w])/g, "$1<em>$2</em>")
+                    .replace(/`([^`]+?)`/g, "<code>$1</code>");
+    const item = line.match(/^\s*[-*]\s+(.*)$/);
+    if(item){ if(!inList){ out += "<ul>"; inList = true; } out += `<li>${item[1]}</li>`; continue; }
+    if(inList){ out += "</ul>"; inList = false; }
+    out += line.trim() === "" ? "<br>" : line + "<br>";
+  }
+  if(inList) out += "</ul>";
+  return out.replace(/(<br>)+$/, "").replace(/<\/ul><br>/g, "</ul>").replace(/<br><ul>/g, "<ul>");
+}
 function short(m){ return (m||"").split("/").pop(); }
 function bare(m){ return short(m).replace("claude-",""); }
 
@@ -147,7 +170,7 @@ async function meta(){
 function add(who, text, cls){
   const d = document.createElement("div");
   d.className = "msg " + (cls || (who === "you" ? "you" : "bot"));
-  d.innerHTML = `<span class="who">${who}</span>${esc(text)}`;
+  d.innerHTML = `<span class="who">${who}</span>${who === "bookly" ? md(text) : esc(text)}`;
   $("log").appendChild(d);
   $("log").scrollTop = $("log").scrollHeight;
   return d;
@@ -261,7 +284,7 @@ async function send(text){
                                         body: JSON.stringify({session, text})});
     const d = await r.json();
     if(d.error){ thinking.remove(); add("error", d.error, "err"); return; }
-    thinking.innerHTML = `<span class="who">bookly</span>${esc(d.reply)}`;
+    thinking.innerHTML = `<span class="who">bookly</span>${md(d.reply)}`;
     renderTriage(d.triage, d.model); renderTools(d.tools, d.triage); renderOutcome(d); renderTraceRow(d);
     if(d.escalations.length || (d.trace && d.trace.handed_over)){
       const t = d.escalations.length ? d.escalations[0].ticket : "";
