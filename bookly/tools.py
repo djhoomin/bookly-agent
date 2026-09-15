@@ -122,13 +122,25 @@ class Outcome:
         #: find_orders results with more than one match: the gate firing.
         self.ambiguities: list[dict[str, Any]] = []
         self.calls: list[str] = []
+        #: (tool, arguments) in order, so an evaluator can ask not only what
+        #: was called but with what: an email the customer never typed is a
+        #: fabricated identifier, and only the arguments show it.
+        self.invocations: list[tuple[str, dict[str, Any]]] = []
 
 
 def dispatch(name: str, args: dict[str, Any], outcome: Outcome) -> dict[str, Any]:
     outcome.calls.append(name)
+    outcome.invocations.append((name, dict(args)))
 
     if name == "find_orders":
-        orders = find_orders_by_email(args.get("email", ""))
+        email = args.get("email", "")
+        if "@" not in email:
+            # A name is not a lookup key. Say so in the result rather than
+            # returning an empty list the model might read as "no orders".
+            return {"found": 0, "orders": [],
+                    "note": "That is not an email address. Ask the customer for the "
+                            "email on their account; do not guess one."}
+        orders = find_orders_by_email(email)
         if not orders:
             return {"found": 0, "orders": [],
                     "note": "No orders on that email. Check the address, or escalate."}

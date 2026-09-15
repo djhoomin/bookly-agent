@@ -118,6 +118,49 @@ def test_order_ids_are_normalised():
     assert get_order("The Idiot") is None
 
 
+class ScriptedTools:
+    """An Anthropic-shaped client that makes the given tool calls, then stops."""
+
+    def __init__(self, calls):
+        self.messages = self
+        self.calls = list(calls)
+
+    def create(self, **kw):
+        if kw.get("output_config"):
+            block = types.SimpleNamespace(
+                type="text", text='{"intent":"order_status","complexity":"simple",'
+                                  '"risk":"none","reason":""}')
+        elif self.calls:
+            name, args = self.calls.pop(0)
+            block = types.SimpleNamespace(type="tool_use", id=f"t{len(self.calls)}",
+                                          name=name, input=args)
+        else:
+            block = types.SimpleNamespace(type="text", text="Could you share your email?")
+        return types.SimpleNamespace(content=[block],
+                                     usage=types.SimpleNamespace(input_tokens=1,
+                                                                 output_tokens=1))
+
+
+def test_fabricated_identifier_is_caught_and_probing_is_not():
+    from evals.cases import _asked_rather_than_guessed
+    msg = "Hi, I'm Sam. I ordered Piranesi last week, where is it?"
+
+    agent = Agent(_client=ScriptedTools([("find_orders", {"email": "sam@example.com"})]))
+    agent.say(msg)
+    ok, note = _asked_rather_than_guessed(agent, ["..."])
+    assert not ok and "never gave" in note, note
+
+    agent = Agent(_client=ScriptedTools([("find_orders", {"email": "sam"})]))
+    agent.say(msg)
+    ok, _ = _asked_rather_than_guessed(agent, ["..."])
+    assert ok, "probing with the customer's own word is harmless"
+    assert "not an email address" in json.dumps(agent.history[-2].content)
+
+    agent = Agent(_client=ScriptedTools([]))
+    agent.say(msg)
+    assert _asked_rather_than_guessed(agent, ["..."])[0]
+
+
 if __name__ == "__main__":
     tests = [v for k, v in sorted(globals().items()) if k.startswith("test_")]
     for t in tests:
