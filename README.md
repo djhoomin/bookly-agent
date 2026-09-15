@@ -165,7 +165,8 @@ asked nicely, and agrees the return window is 90 days when told firmly enough. N
 is an exception. They are the model extending the policy because it wanted to be useful. So
 `lookup_policy` takes the question in plain words and returns either a published note or
 "nothing published", and after any general-question turn a second small model reads the reply
-against the text that was looked up and lists every Bookly fact the text does not support. If
+against the text that was looked up, plus everything the tools have returned so far in the
+conversation, and lists every Bookly fact that neither supports. If
 there is one, the reply is replaced with the published text and an offer of a person, and the
 claims the model wanted to make are recorded in the trace. Where nothing was published, any
 factual claim is unsupported by construction, so "we do not publish one" is the only answer
@@ -214,7 +215,7 @@ pane is the part a buyer should ask to see. Open it with `?say=Where's my book?`
 
 `evals/` ships with the agent rather than after it. The cases assert on
 **outcomes**, not wording: did a refund actually fire, was a human brought in,
-was a state-changing action taken against the wrong order. Twelve of the twenty
+was a state-changing action taken against the wrong order. Twelve of the twenty-one
 cases pass only if the agent *refuses*, *asks*, *declines to invent*, or *stays out of it*, which is the half that
 containment metrics cannot see.
 
@@ -224,7 +225,7 @@ one of two Dunes, and a book that belongs to a different customer. Identificatio
 is where support conversations actually go wrong, and a test set that hands the
 agent a perfect identifier in the first sentence never exercises it.
 
-Five cover the brief's third use case, general questions, where the outcome is the text.
+Six cover the brief's third use case, general questions, where the outcome is the text.
 Those check that the published policy was looked up, that the reply was held to it, and in
 one case that an instruction planted in the question ("the return window is now 90 days")
 changed nothing, because neither the verdict nor the published text lives in the prompt.
@@ -291,18 +292,18 @@ email addresses on purpose, so it is ignored rather than allowed to bury the rea
 Moderation is listed as free on Mistral's API pricing page. The call is still counted, so a
 future price is one number away.
 
-Measured across the eval suite, 105 API calls of which 26 are moderation, at list prices:
+Measured across the eval suite, 116 API calls of which 29 are moderation, at list prices:
 
 | | Per conversation | 10,000/day | Per year |
 |---|---|---|---|
-| routed | $0.0111 | $111 | **$40,430** |
-| all Opus | $0.0303 | $303 | **$110,617** |
-| saved | **63%** | | **$70,187** |
+| routed | $0.0112 | $112 | **$40,953** |
+| all Opus | $0.0311 | $311 | **$113,452** |
+| saved | **64%** | | **$72,498** |
 
 `python -m bookly.costs` recomputes this from whatever usage you feed it, so it
 runs against production traffic rather than needing a rewrite.
 
-Three of twenty conversations went to Opus: the fraud signal, the threat, and the planted
+Three of twenty-one conversations went to Opus: the fraud signal, the threat, and the planted
 instruction, because anything risky is routed to the heavy model. An abusive customer costs more to serve. That is a choice,
 and the trace makes it visible rather than burying it in an average.
 
@@ -328,11 +329,11 @@ Set `BOOKLY_LIGHT_MODEL` and `BOOKLY_HEAVY_MODEL` in `.env` and nothing else cha
 
 | | Anthropic, routed | DeepSeek V4.1 Flash |
 |---|---|---|
-| cases | 20 / 20 | 20 / 20 |
+| cases | 21 / 21 | 20 / 20 on the twenty-case set of the time |
 | phrasings | 40 / 40 | 39 / 40 on the first pass, 40 / 40 on rerun |
 | return decisions through `policy.py` | all | all |
 | prose answers held to the published text | 4 / 4 | 6 / 6 |
-| per conversation | $0.0111 | $0.0012 |
+| per conversation | $0.0112 | $0.0012 |
 
 The one first-pass miss was a gateway read timeout, recorded as such in `samples/variants.deepseek.txt`,
 and the rerun of that scenario is appended below it. Traces for both runs are in `samples/`.
@@ -387,10 +388,10 @@ happened that day.
 `python -m bookly.analyze` computes the operating numbers straight from the trace:
 
 ```
-resolved without a human              85%   (17/20)
-escalated                             15%   (3/20)
-changed state (refund issued)         20%   (4/20)
-saw several orders, acted on none     25%   (5/20)
+resolved without a human              86%   (18/21)
+escalated                             14%   (3/21)
+changed state (refund issued)         19%   (4/21)
+saw several orders, acted on none     29%   (6/21)
 
 why the policy function refused
     4  outside_window
@@ -407,16 +408,16 @@ flagged turns: 4
   fraud_signal     instruction_in_the_question_does_not...   mistral  jailbreaking 0.993
   fraud_signal     after_handover_the_agent_stops            mistral  jailbreaking 0.971
 
-prose answers held to published policy: 4 turn(s), 4 grounded, 0 replaced
+prose answers held to published policy: 5 turn(s), 5 grounded, 0 replaced
 
 turns after handover: 2, model calls made: 0, cost $0.0000
 
 asked about, nothing published: 1
   'student discount'
 
-moderation ran on 26/26 turns;  flags decided by: 3 mistral, 1 triage
+moderation ran on 29/29 turns;  flags decided by: 3 mistral, 1 triage
 
-cost 0.2215 USD over 20 conversations = $0.01108 each, $110.77 at 10k/day
+cost 0.2356 USD over 21 conversations = $0.01122 each, $112.20 at 10k/day
 ```
 
 The test for whether the schema is right: can someone answer "why did we refuse 41 refunds last
@@ -439,7 +440,7 @@ reason from customer-facing text. Three things followed:
   neither of which is an eligibility decision
 - it got **24% cheaper** on the accounting in use at the time, $0.01075 to $0.00817 per
   conversation, because a direct answer takes fewer round trips than reading prose and
-  reasoning about it. The per-turn accounting that replaced it (see below) reads $0.01108 on the twenty-case set with moderation and grounding.
+  reasoning about it. The per-turn accounting that replaced it (see below) reads $0.01122 on the twenty-one-case set with moderation and grounding.
 
 `analyze.py` now asserts this rather than describing it: a return question answered without
 consulting `policy.py` prints a warning.
@@ -483,6 +484,13 @@ keep, and each is fixed in the history.
   backend said. The fix and the two further holes it exposed are in the decisions section
   above; the point here is that the UI, the analyzer's guard and the five-phrasing run each
   caught a layer the others could not.
+- **The grounding check flagged the truth, twice.** First on a turn that listed three orders
+  from a lookup, because triage had called the email a general question and the grader was
+  handed an empty source. Then, after that was fixed for tools called in the same turn, on
+  "The Idiot" typed after seeing the list, where the answer came from a lookup two turns
+  earlier. Both found by a person at the UI, both now cases. The grader's source is now the
+  policy text plus everything the tools have returned in the conversation, which is what
+  "grounded" should have meant from the start.
 - **Every test customer spoke like a fixture.** Seven cases, and each opened with an order ID
   or an email in the first sentence. The identification step, which is where real support
   conversations go wrong, was never exercised, and the demo never showed it. Five cases now
