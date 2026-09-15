@@ -48,18 +48,20 @@ def main() -> int:
     if codes.get("eligible"):
         print(f"  {codes['eligible']:>3}  eligible (approved, shown for completeness)")
 
-    # A refusal the policy function never saw is invisible here, and that is a
-    # real gap rather than a display bug: the agent sometimes reads the order and
-    # the published policy, concludes for itself, and never calls start_return.
-    # The customer is told no and the trace records no code, so the refusal-reason
-    # distribution undercounts. Fixing it properly means routing every refusal
-    # through the policy function rather than letting the model pre-empt it.
-    silent = [r for r in rows
-              if not r["policy_codes"] and not r["state_changed"]
-              and "start_return" not in r["tools"] and r["tools"]]
-    if silent:
-        print(f"\n  note: {len(silent)} turn(s) resolved without consulting the "
-              f"policy function, so any refusal there is uncounted above")
+    # A return question answered without consulting the policy function means the
+    # model decided for itself, which is the failure this design exists to
+    # prevent. Turns with other intents legitimately have no policy code: asking
+    # which order, or handing over to a person, are not eligibility decisions.
+    unchecked = [r for r in rows
+                 if r["intent"] == "return_refund" and not r["policy_codes"]
+                 and not r["asked_clarifying"]]
+    if unchecked:
+        print(f"\n  WARNING: {len(unchecked)} return question(s) answered without "
+              f"consulting policy.py:")
+        for r in unchecked:
+            print(f"    {r['conversation']} turn {r['turn']}")
+    else:
+        print("\n  every return decision went through policy.py")
 
     if flagged:
         print(f"\nflagged turns: {len(flagged)}")

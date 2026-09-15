@@ -260,20 +260,24 @@ if age &gt; RETURN_WINDOW_DAYS:
           <span class="mono">outside_window</span> &times;3,
           <span class="mono">fraud_signal</span> &times;1.</span></div>
       </div>
-      <div class="gate">
-        <div class="t">What the trace found in itself</div>
-        <p style="color:#6d3a30">Four of eight turns resolved <strong>without calling the policy
-        function</strong>. The agent read the order and the published policy and concluded for
-        itself. The gate stops wrong approvals: nothing refunds without
-        <span class="mono">start_return</span>. It does not force <em>refusals</em> through
-        policy, so the model can decline on its own reading and no code is recorded.
-        <strong>That is the first thing I would change</strong>, and observability is how I
-        found it.</p>
+      <div class="gate" style="background:var(--allow-bg);border-color:#cfe0d6">
+        <div class="t" style="color:var(--allow)">What the trace caught during the build</div>
+        <p style="color:#2c5340">Four of eight turns were refusing customers <strong>without
+        calling the policy function</strong>, deciding from the published prose instead. The gate
+        sealed wrong approvals and left wrong refusals open. Fixed by adding a read-only
+        <span class="mono">check_return_eligibility</span>, so there is an authoritative answer
+        without attempting the action. Every refund decision now records a code, two previously
+        invisible refusal reasons appeared, and it came out <strong>24% cheaper</strong>: fewer
+        round trips than reading prose and reasoning about it.</p>
       </div>
-      <p style="font-size:12.5px">After that: real transcripts for the agent's cases, and a
-      public adversarial set such as <span class="mono">deepset/prompt-injections</span> (662
-      rows, Apache 2.0) to give the triage screen precision and recall instead of my opinion.
-      They score different layers.</p>
+      <div class="trade">
+        <div class="label">What I would change first, given a production context</div>
+        <p style="font-size:13px">Build the eval set from real transcripts. These seven test
+        failures I thought of, which is the weakest kind of test. A public adversarial set such as
+        <span class="mono">deepset/prompt-injections</span> (662 rows, Apache 2.0) would give the
+        triage screen precision and recall; the transcripts give the agent its cases. Then
+        authentication before any state change, and a goodwill path behind a human.</p>
+      </div>
     </div>
   </div>
   <div class="foot"><span>evals/ &middot; 7 cases</span><span>05</span></div>

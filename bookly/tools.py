@@ -10,9 +10,16 @@ clarifying question is therefore a consequence of the interface rather than an
 instruction in the prompt, which is the difference between a behaviour that
 usually happens and one that always does.
 
-**The model never decides eligibility.** `start_return` calls
-`policy.refund_eligibility` itself and reports the verdict. The model can
-phrase the outcome, and cannot change it.
+**The model never decides eligibility, in either direction.** `start_return`
+calls `policy.refund_eligibility` and reports the verdict, so a wrong approval is
+impossible. `check_return_eligibility` is the read-only half: it returns the same
+decision without acting, so there is a cheap authoritative answer for the "can I
+return this" question and no reason to reason from the published prose instead.
+
+That second tool exists because the trace caught its absence. Without it, four of
+eight turns refused customers after reading `lookup_policy` and deciding for
+themselves: correct answers, arrived at the wrong way, with no policy code
+recorded. The gate sealed wrong approvals and left wrong refusals open.
 """
 
 from __future__ import annotations
@@ -63,9 +70,26 @@ TOOLS: list[dict[str, Any]] = [
         },
     },
     {
+        "name": "check_return_eligibility",
+        "description": (
+            "Ask Bookly policy whether one specific order can be returned, without "
+            "starting anything. Use this whenever a customer asks about returning or "
+            "refunding a specific order. Do not infer the answer from the published "
+            "policy text: that text is a summary for customers, and this is the "
+            "decision."
+        ),
+        "input_schema": {
+            "type": "object",
+            "properties": {"order_id": {"type": "string"}},
+            "required": ["order_id"],
+        },
+    },
+    {
         "name": "lookup_policy",
         "description": (
-            "Read Bookly's published policy on a topic. Topics: returns, shipping, password."
+            "Read Bookly's published policy text on a topic, for answering general "
+            "questions. Topics: returns, shipping, password. This is customer-facing "
+            "prose, not a decision: for a specific order use check_return_eligibility."
         ),
         "input_schema": {
             "type": "object",
@@ -141,6 +165,13 @@ def dispatch(name: str, args: dict[str, Any], outcome: Outcome) -> dict[str, Any
             outcome.refunds.append(payload)
             payload["confirmation"] = f"RET-{order.order_id[-5:]}"
         return payload
+
+    if name == "check_return_eligibility":
+        order = get_order(args.get("order_id", ""))
+        if not order:
+            return {"error": "unknown_order", "note": "No such order ID. Do not guess one."}
+        decision = refund_eligibility(order)
+        return {"order_id": order.order_id, "title": order.title, **decision.to_dict()}
 
     if name == "lookup_policy":
         topic = args.get("topic", "")

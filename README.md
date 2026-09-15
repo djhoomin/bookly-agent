@@ -151,19 +151,30 @@ cost 0.0752 USD over 7 conversations = $0.01075 each
 The test for whether the schema is right: can someone answer "why did we refuse 41 refunds last
 week" without opening a transcript.
 
+## What the trace caught during the build
+
+Four of eight turns were refusing customers **without calling the policy function**. The agent
+read the order status and the published policy prose and decided for itself. The gate sealed
+wrong approvals, since nothing refunds without `start_return`, but it left wrong refusals open,
+and no policy code was recorded for any of them.
+
+Fixed by adding `check_return_eligibility`, a read-only tool returning the same `Decision`
+without acting, so there is a cheap authoritative answer to "can I return this" and no reason to
+reason from customer-facing text. Three things followed:
+
+- every refund decision now records a code, and `digital_item` and `not_yet_delivered` appeared
+  in the refusal reasons where they had been invisible
+- the two turns still without a policy code are a disambiguation question and an escalation,
+  neither of which is an eligibility decision
+- it got **24% cheaper**, $0.01075 to $0.00817 per conversation, because a direct answer takes
+  fewer round trips than reading prose and reasoning about it
+
+`analyze.py` now asserts this rather than describing it: a return question answered without
+consulting `policy.py` prints a warning.
+
 ## What I would change first
 
-**The trace found a hole in the architecture it was built to observe.** Four of eight turns
-resolved *without calling the policy function*: the agent read the order status and the published
-policy text and concluded for itself. The gate stops wrong approvals, because nothing refunds
-without `start_return`. It does not force **refusals** through policy, so the model can decline
-on its own reading and no code is recorded. That weakens the central claim of this design in a
-specific, fixable way, and it is the first thing I would change: route every refund decision
-through `policy.py`, including the negative ones.
-
-Second:
-
-**Then stop testing only the failures I thought of.** Two sources replace them, and they test
+**Build the eval set from real transcripts.** Two sources replace them, and they test
 different layers.
 
 **Real transcripts** give the agent's cases. What goes wrong in the first week of a deployment
