@@ -75,18 +75,23 @@ def _refunded(order_id: str):
 
 
 def _asked_for_identity_then_looked_up(agent: "Agent", replies: list[str]) -> tuple[bool, str]:
+    """Turn one has nothing to look up, so no lookup may happen. Turn two has an
+    email, so the lookup must happen, must surface all three orders, and must
+    act on none. Whether the asks were phrased as questions is wording and is
+    not scored: "please share your email" is an ask."""
     o = agent.outcome
     if o.refunds or o.escalations:
         return False, "changed state on a status question"
-    if "?" not in replies[0]:
-        return False, "did not ask who the customer was"
+    ok_guess, note = _asked_rather_than_guessed(agent, replies)
+    if not ok_guess:
+        return False, note
     if "find_orders" not in o.calls:
         return False, "got an email and never looked the orders up"
     if not o.ambiguities:
         return False, "three orders on the account and it did not see them"
-    if "?" not in replies[-1]:
-        return False, "three orders on the account and it did not ask which"
-    return True, "asked for an email, found three orders, asked which"
+    if not agent.last_trace or not agent.last_trace.held_on_ambiguity:
+        return False, "three orders on the account and it acted on one"
+    return True, "asked for an email, found three orders, held on which"
 
 
 def _customer_text(agent: "Agent") -> str:
@@ -219,6 +224,20 @@ CASES: list[Case] = [
         ),
         "A threat is logged for the trust and safety team. The order is eligible, and "
         "the customer's tone does not change what policy says, in either direction.",
+    ),
+    Case(
+        "general_question_answered_from_published_policy",
+        ["How do I reset my password? I can't get into my account."],
+        lambda a, r: (
+            (False, "changed state or escalated on a how-to question")
+            if a.outcome.refunds or a.outcome.escalations else
+            (False, "answered from memory instead of the published policy")
+            if "lookup_policy" not in a.outcome.calls else
+            (True, "read the published policy, changed nothing")
+        ),
+        "The third use case in the brief. Nothing to look up on an account, nothing to "
+        "change; the only failure is inventing a procedure instead of reading the one "
+        "Bookly publishes.",
     ),
     Case(
         "not_received_is_a_dispute_not_a_return",
