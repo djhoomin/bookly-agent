@@ -51,13 +51,17 @@ def main() -> int:
     if codes.get("eligible"):
         print(f"  {codes['eligible']:>3}  eligible (approved, shown for completeness)")
 
-    # A return question answered without consulting the policy function means the
-    # model decided for itself, which is the failure this design exists to
-    # prevent. Turns with other intents legitimately have no policy code: asking
-    # which order, or handing over to a person, are not eligibility decisions.
+    # A return conversation in which a turn read account data and then answered
+    # without a policy code means the model decided eligibility from the order
+    # status, which is the failure this design exists to prevent. The intent is
+    # judged over the conversation, since the deciding turn is often the one
+    # where the customer typed a verification code. Turns that only sent or
+    # checked a code, asked which order, or handed over are not decisions.
+    return_convs = {r["conversation"] for r in rows if r["intent"] == "return_refund"}
     unchecked = [r for r in rows
-                 if r["intent"] == "return_refund" and not r["policy_codes"]
-                 and not r["held_on_ambiguity"] and not r["escalated"]]
+                 if r["conversation"] in return_convs and r.get("account_reads", 0) > 0
+                 and not r["policy_codes"] and not r["held_on_ambiguity"]
+                 and not r["escalated"] and not r["state_changed"]]
     if unchecked:
         print(f"\n  WARNING: {len(unchecked)} return question(s) answered without "
               f"consulting policy.py:")
@@ -79,6 +83,12 @@ def main() -> int:
               f"{len(checked) - len(replaced)} grounded, {len(replaced)} replaced")
         for r in replaced:
             print(f"  {r['conversation']:<40} said: {'; '.join(r.get('unsupported') or [])[:90]}")
+
+    refusals = sum(r.get("gate_refusals", 0) for r in rows)
+    reads = sum(r.get("account_reads", 0) for r in rows)
+    unverified_reads = sum(r.get("account_reads", 0) for r in rows if not r.get("verified"))
+    print(f"\nverification gate: {refusals} refusal(s), {reads} account read(s), "
+          f"{unverified_reads} before verification")
 
     after = [r for r in rows if r.get("handed_over")]
     if after:

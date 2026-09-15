@@ -10,6 +10,14 @@ clarifying question is therefore a consequence of the interface rather than an
 instruction in the prompt, which is the difference between a behaviour that
 usually happens and one that always does.
 
+**The fourth gate: account data needs a verified email.** An email address and
+an order number are both on packing slips and in screenshots; neither proves
+anything. `send_verification_code` puts a code in the customer's inbox and
+`verify_code` checks it. Until an address is verified in this conversation,
+every tool that reads or changes account data refuses, in its result, with the
+next step. The code itself never appears in any tool result, so the model cannot
+read it, repeat it, or verify on the customer's behalf.
+
 **The model never decides eligibility, in either direction.** `start_return`
 calls `policy.refund_eligibility` and reports the verdict, so a wrong approval is
 impossible. Both policy tools require a `reason` from a fixed list, because the
@@ -25,18 +33,48 @@ import json
 import re
 from typing import Any
 
-from .backend import find_orders_by_email, find_policy, get_order
+from .backend import find_orders_by_email, find_policy, get_order, verification_code
 from .policy import REASONS, refund_eligibility
+
+MAX_CODE_ATTEMPTS = 3
 
 EMAIL = re.compile(r"^[^@\s]+@[^@\s]+\.[^@\s]+$")
 
 TOOLS: list[dict[str, Any]] = [
     {
+        "name": "send_verification_code",
+        "description": (
+            "Send a six-digit verification code to an email address. Call this as soon as "
+            "the customer gives their email, before any lookup. The reply never confirms "
+            "whether the address has an account. You never see the code: ask the customer "
+            "to read it from their inbox."
+        ),
+        "input_schema": {
+            "type": "object",
+            "properties": {"email": {"type": "string"}},
+            "required": ["email"],
+        },
+    },
+    {
+        "name": "verify_code",
+        "description": (
+            "Check the code the customer read from their inbox. On success, account data "
+            "for that email can be read for the rest of this conversation. After three "
+            "wrong codes, hand over to a person."
+        ),
+        "input_schema": {
+            "type": "object",
+            "properties": {"email": {"type": "string"},
+                           "code": {"type": "string", "description": "Six digits"}},
+            "required": ["email", "code"],
+        },
+    },
+    {
         "name": "find_orders",
         "description": (
-            "Look up a customer's orders by email address. Use this when the customer "
-            "has not given an order ID. Returns every order on the account, which may "
-            "be more than one."
+            "Look up a customer's orders by email address, once that address has been "
+            "verified in this conversation. Returns every order on the account, which "
+            "may be more than one."
         ),
         "input_schema": {
             "type": "object",
@@ -46,7 +84,9 @@ TOOLS: list[dict[str, Any]] = [
     },
     {
         "name": "get_order_status",
-        "description": "Fetch the current status and tracking reference for one order.",
+        "description": ("Fetch the current status and tracking reference for one order on a "
+                        "verified account. An order number alone is not access: verify the "
+                        "email first."),
         "input_schema": {
             "type": "object",
             "properties": {"order_id": {"type": "string", "description": "e.g. BK-10231"}},
@@ -144,6 +184,20 @@ class Outcome:
         self.calls: list[str] = []
         #: Every policy code returned this conversation, in order.
         self.decisions: list[str] = []
+        #: Addresses verified by code in this conversation. The only key that
+        #: opens account data.
+        self.verified_emails: set[str] = set()
+        #: Addresses a code was sent to, and wrong-code attempts per address.
+        self.codes_sent: list[str] = []
+        self.code_attempts: dict[str, int] = {}
+        #: The mock inbox: (email, code) pairs. Read by the UI and the CLI so a
+        #: person can type the code. Never returned to the model.
+        self.mock_inbox: list[tuple[str, str]] = []
+        #: Times a tool refused because the account was not verified, and times
+        #: account data was actually read. The analyzer proves reads happen only
+        #: after verification.
+        self.gate_refusals: int = 0
+        self.account_reads: int = 0
         #: Customer messages received after a handover. None of them reached a
         #: model; they were appended to the ticket.
         self.after_handover: list[str] = []
@@ -188,18 +242,79 @@ def dispatch(name: str, args: dict[str, Any], outcome: Outcome) -> dict[str, Any
     return result
 
 
+def find_orders_emails() -> set[str]:
+    from .backend import ORDERS
+    return {o.email.lower() for o in ORDERS.values()}
+
+
+def _not_verified(outcome: Outcome, email: str = "") -> dict[str, Any]:
+    outcome.gate_refusals += 1
+    if email:
+        return {"error": "not_verified",
+                "note": f"{email} has not been verified in this conversation. Send a "
+                        "verification code to it and ask the customer for the code."}
+    return {"error": "not_verified",
+            "note": "No account has been verified in this conversation. Ask the customer "
+                    "for the email on the order, send a code to it, and verify the code "
+                    "before reading anything."}
+
+
+def _owned_order(order_id: str, outcome: Outcome):
+    """The order, if it exists and belongs to a verified account. The result for
+    'not yours' and 'does not exist' is the same on purpose, so order numbers
+    cannot be enumerated through the agent."""
+    order = get_order(order_id)
+    if not outcome.verified_emails:
+        return None, _not_verified(outcome)
+    if not order or order.email.lower() not in outcome.verified_emails:
+        return None, {"error": "unknown_order",
+                      "note": "No such order on the verified account. Do not guess another."}
+    return order, None
+
+
 def _dispatch(name: str, args: dict[str, Any], outcome: Outcome) -> dict[str, Any]:
     outcome.calls.append(name)
     outcome.invocations.append((name, dict(args)))
 
+    if name == "send_verification_code":
+        email = (args.get("email") or "").strip().lower()
+        if not EMAIL.match(email):
+            return {"sent": False, "note": "That is not an email address. Ask for one."}
+        outcome.codes_sent.append(email)
+        outcome.mock_inbox.append((email, verification_code(email)))
+        return {"sent": True,
+                "note": "If that address has a Bookly account, a six-digit code is in its "
+                        "inbox. Ask the customer to read it to you."}
+
+    if name == "verify_code":
+        email = (args.get("email") or "").strip().lower()
+        code = "".join(ch for ch in str(args.get("code") or "") if ch.isdigit())
+        if email not in outcome.codes_sent:
+            return {"verified": False, "note": "No code has been sent to that address yet."}
+        if outcome.code_attempts.get(email, 0) >= MAX_CODE_ATTEMPTS:
+            return {"verified": False, "note": "Too many wrong codes. Hand over to a person."}
+        if code == verification_code(email) and email in find_orders_emails():
+            outcome.verified_emails.add(email)
+            return {"verified": True, "note": "Verified. Account data for this address can "
+                                              "be read for the rest of this conversation."}
+        outcome.code_attempts[email] = outcome.code_attempts.get(email, 0) + 1
+        left = MAX_CODE_ATTEMPTS - outcome.code_attempts[email]
+        return {"verified": False,
+                "note": f"That code is not right. {left} attempt(s) left; ask the customer "
+                        "to check the inbox." if left else
+                        "That code is not right and there are no attempts left. Hand over."}
+
     if name == "find_orders":
-        email = args.get("email", "")
-        if not EMAIL.match(email.strip()):
+        email = (args.get("email") or "").strip().lower()
+        if not EMAIL.match(email):
             # A name is not a lookup key. Say so in the result rather than
             # returning an empty list the model might read as "no orders".
             return {"found": 0, "orders": [],
                     "note": "That is not an email address. Ask the customer for the "
                             "email on their account; do not guess one."}
+        if email not in outcome.verified_emails:
+            return _not_verified(outcome, email)
+        outcome.account_reads += 1
         orders = find_orders_by_email(email)
         if not orders:
             return {"found": 0, "orders": [],
@@ -220,18 +335,22 @@ def _dispatch(name: str, args: dict[str, Any], outcome: Outcome) -> dict[str, An
         }
 
     if name == "get_order_status":
-        order = get_order(args.get("order_id", ""))
-        if not order:
-            return {"error": "unknown_order", "note": "No such order ID."}
+        order, refusal = _owned_order(args.get("order_id", ""), outcome)
+        if refusal:
+            return refusal
+        outcome.account_reads += 1
         return {"order_id": order.order_id, "title": order.title, "status": order.status,
                 "carrier_ref": order.carrier_ref,
                 "ordered_on": order.ordered_on.isoformat(),
-                "delivered_on": order.delivered_on.isoformat() if order.delivered_on else None}
+                "delivered_on": order.delivered_on.isoformat() if order.delivered_on else None,
+                "note": "Status is not a refund decision. For any return or refund question "
+                        "call check_return_eligibility."}
 
     if name == "start_return":
-        order = get_order(args.get("order_id", ""))
-        if not order:
-            return {"error": "unknown_order", "note": "No such order ID. Do not guess one."}
+        order, refusal = _owned_order(args.get("order_id", ""), outcome)
+        if refusal:
+            return refusal
+        outcome.account_reads += 1
         reason, note = _reason(args.get("reason", ""), outcome)
         decision = refund_eligibility(order, reason)
         outcome.decisions.append(decision.code)
@@ -243,9 +362,10 @@ def _dispatch(name: str, args: dict[str, Any], outcome: Outcome) -> dict[str, An
         return payload
 
     if name == "check_return_eligibility":
-        order = get_order(args.get("order_id", ""))
-        if not order:
-            return {"error": "unknown_order", "note": "No such order ID. Do not guess one."}
+        order, refusal = _owned_order(args.get("order_id", ""), outcome)
+        if refusal:
+            return refusal
+        outcome.account_reads += 1
         reason, note = _reason(args.get("reason", ""), outcome)
         decision = refund_eligibility(order, reason)
         outcome.decisions.append(decision.code)

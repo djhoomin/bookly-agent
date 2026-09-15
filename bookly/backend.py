@@ -7,6 +7,7 @@ code rather than prose, and rules you can see are rules you can test.
 
 from __future__ import annotations
 
+import hashlib
 import re
 from dataclasses import dataclass
 from datetime import date, timedelta
@@ -81,6 +82,15 @@ def find_policy(topic: str) -> tuple[str, str] | None:
         if hits > score:
             best, score = key, hits
     return (best, POLICY_NOTES[best]) if best else None
+
+
+def verification_code(email: str) -> str:
+    """The six-digit code the mock inbox receives. Deterministic per address so
+    the eval set and the demo can type it; a real deployment generates one per
+    request, expires it, and sends it. The model never sees this function's
+    output: it goes to the inbox, and the inbox is the customer's."""
+    digest = hashlib.sha256(email.lower().strip().encode()).hexdigest()
+    return f"{int(digest[:8], 16) % 1_000_000:06d}"
 
 
 def find_orders_by_email(email: str) -> list[Order]:

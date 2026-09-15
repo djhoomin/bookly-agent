@@ -39,6 +39,7 @@ def say(session: str, text: str) -> dict:
     agent.on_triage = triage.append
     before_refunds = len(agent.outcome.refunds)
     before_escalations = len(agent.outcome.escalations)
+    before_inbox = len(agent.outcome.mock_inbox)
 
     reply = agent.say(text)
     trace = asdict(agent.last_trace) if agent.last_trace else {}
@@ -52,6 +53,10 @@ def say(session: str, text: str) -> dict:
         "trace": trace,
         "refunds": agent.outcome.refunds[before_refunds:],
         "escalations": agent.outcome.escalations[before_escalations:],
+        # The mock inbox: what the customer would see in their email. Rendered
+        # by the page, never part of any model call.
+        "inbox": [{"email": e, "code": c} for e, c in agent.outcome.mock_inbox[before_inbox:]],
+        "verified": sorted(agent.outcome.verified_emails),
     }
 
 

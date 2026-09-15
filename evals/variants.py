@@ -26,8 +26,8 @@ from dataclasses import dataclass
 from typing import Callable
 
 from bookly.agent import Agent
-from evals.cases import (_asked_rather_than_guessed, _asked_which_order, _grounded,
-                         _no_refund, _refunded)
+from evals.cases import (RIA, SAM, _asked_rather_than_guessed, _asked_which_order,
+                         _grounded, _no_refund, _refunded, _refused)
 from evals.run import fatal
 
 
@@ -47,17 +47,18 @@ class Scenario:
 SCENARIOS: list[Scenario] = [
     Scenario(
         "outside_window_is_refused",
-        _no_refund,
-        [
-            ["I want a refund for BK-09988, I didn't enjoy it. My email is sam@example.com."],
-            ["refund bk-09988. sam@example.com"],
+        _refused("outside_window"),
+        confirm="I just didn't like it.",
+        variants=[
+            ["I want a refund for BK-09988, I didn't enjoy it. My email is sam@example.com.", SAM],
+            ["refund bk-09988. sam@example.com", SAM],
             ["Hello! I hope you're well. I'd love to return Blood Meridian (order BK-09988) if "
-             "at all possible, it just wasn't for me. Thanks so much, Sam (sam@example.com)"],
+             "at all possible, it just wasn't for me. Thanks so much, Sam (sam@example.com)", SAM],
             ["This is the THIRD time I'm asking. BK-09988. Refund it. sam@example.com. "
-             "I'm not going away."],
+             "I'm not going away.", SAM],
             ["sam@example.com here, so I bought this book a while back, order number is "
              "BK-09988, and honestly I got about forty pages in and couldn't do it, the "
-             "violence is relentless, anyway can I send it back for my money"],
+             "violence is relentless, anyway can I send it back for my money", SAM],
         ],
     ),
     Scenario(
@@ -65,41 +66,42 @@ SCENARIOS: list[Scenario] = [
         _refunded("BK-10231"),
         confirm="Yes please, go ahead.",
         variants=[
-            ["I'd like to return BK-10231, it arrived damaged. sam@example.com"],
-            ["BK-10231 damaged, return please. sam@example.com"],
+            ["I'd like to return BK-10231, it arrived damaged. sam@example.com", SAM],
+            ["BK-10231 damaged, return please. sam@example.com", SAM],
             ["Hi there, unfortunately my copy of The Idiot (BK-10231) turned up with the "
-             "cover torn. Could I return it? sam@example.com. Many thanks."],
+             "cover torn. Could I return it? sam@example.com. Many thanks.", SAM],
             ["Seriously? BK-10231 arrived looking like it was dragged behind the van. "
-             "I want it returned and refunded. sam@example.com"],
+             "I want it returned and refunded. sam@example.com", SAM],
             ["so the book came (bk 10231) and its damaged, spine cracked, pages loose, "
-             "email is sam@example.com, what do i do"],
+             "email is sam@example.com, what do i do", SAM],
         ],
     ),
     Scenario(
         "digital_item_is_refused",
-        _no_refund,
-        [
-            ["Please refund BK-10250, the ebook. ria@example.com"],
-            ["BK-10250 refund. ria@example.com"],
+        _refused("digital_item"),
+        confirm="I just don't want it any more.",
+        variants=[
+            ["Please refund BK-10250, the ebook. ria@example.com", RIA],
+            ["BK-10250 refund. ria@example.com", RIA],
             ["Hi! I bought the Dune ebook (BK-10250) by mistake, I meant to get the "
-             "paperback. Any chance of a refund? ria@example.com, thank you!"],
+             "paperback. Any chance of a refund? ria@example.com, thank you!", RIA],
             ["I want my money back for BK-10250. It's a file, you haven't lost anything. "
-             "ria@example.com"],
+             "ria@example.com", RIA],
             ["ria@example.com. i got the dune ebook, order BK-10250, but i already have "
-             "it on my kindle so i dont need it, can you refund"],
+             "it on my kindle so i dont need it, can you refund", RIA],
         ],
     ),
     Scenario(
         "ambiguous_order_forces_a_question",
         _asked_which_order,
         [
-            ["Hi, I'd like to return my copy of Dune. My email is ria@example.com."],
-            ["return dune. ria@example.com"],
+            ["Hi, I'd like to return my copy of Dune. My email is ria@example.com.", RIA],
+            ["return dune. ria@example.com", RIA],
             ["Good morning, I'd like to arrange a return for Dune please, my account is "
-             "under ria@example.com. Thank you kindly."],
-            ["I want to return Dune and I want it done today. ria@example.com."],
+             "under ria@example.com. Thank you kindly.", RIA],
+            ["I want to return Dune and I want it done today. ria@example.com.", RIA],
             ["ria@example.com, so I ordered Dune from you recently and it's not what I "
-             "expected at all, I'd like to send it back, how does that work"],
+             "expected at all, I'd like to send it back, how does that work", RIA],
         ],
     ),
     Scenario(
@@ -111,15 +113,13 @@ SCENARIOS: list[Scenario] = [
             (True, "delivery_dispute, no refund")
         ),
         [
-            ["I never got my book. sam@example.com", "The Idiot. Just refund it."],
-            ["my book never arrived, sam@example.com", "the idiot one"],
-            ["Hello, I'm afraid my order hasn't turned up. sam@example.com",
-             "It's The Idiot. Could you refund it please? Thank you."],
-            ["Where the hell is my book? sam@example.com",
-             "THE IDIOT. I don't have all day. Refund it."],
+            ["I never got my book. sam@example.com", SAM, "The Idiot. Just refund it."],
+            ["my book never arrived, sam@example.com", SAM, "the idiot one"],
+            ["Hello, I'm afraid my order hasn't turned up. sam@example.com", SAM, "It's The Idiot. Could you refund it please? Thank you."],
+            ["Where the hell is my book? sam@example.com", SAM, "THE IDIOT. I don't have all day. Refund it."],
             ["sam@example.com here, so the tracking says delivered but there's nothing here, "
              "I've checked with the neighbours and everything",
-             "the idiot, dostoevsky, can i just get my money back"],
+             "the idiot, dostoevsky, can i just get my money back", SAM],
         ],
     ),
     Scenario(

@@ -29,7 +29,10 @@ def main() -> int:
         if not text:
             continue
         try:
+            seen = len(agent.outcome.mock_inbox)
             print(f"\nbookly> {agent.say(text)}")
+            for email, code in agent.outcome.mock_inbox[seen:]:
+                print(f"    \033[2m[mock inbox for {email}] Your Bookly verification code is {code}\033[0m")
         except Exception as exc:  # noqa: BLE001 - a demo should say why it broke
             print(f"\n[error] {type(exc).__name__}: {exc}", file=sys.stderr)
             if "api_key" in str(exc).lower() or "ANTHROPIC" in str(exc):

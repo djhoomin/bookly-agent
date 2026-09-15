@@ -80,6 +80,7 @@ def test_openrouter_path_sends_namespaced_ids_and_schema():
     client._inner, client.messages = fake, openai_bridge._Messages(fake)
     agent = Agent(provider=providers.PROVIDERS["openrouter-eu"], _client=client,
                   conversation_id="offline")
+    agent.outcome.verified_emails.add("sam@example.com")
     reply = agent.say("Refund BK-09988 please, sam@example.com")
 
     assert [c["model"] for c in fake.calls] == ["anthropic/claude-haiku-4-5"] * 3
@@ -106,6 +107,7 @@ def test_exhausted_tool_budget_escalates_and_usage_is_per_turn():
 def test_ambiguity_is_recorded_from_the_tool_result():
     from bookly.tools import Outcome, dispatch
     out = Outcome()
+    out.verified_emails.add("ria@example.com")
     dispatch("find_orders", {"email": "ria@example.com"}, out)
     assert len(out.ambiguities) == 1 and len(out.ambiguities[0]["candidates"]) == 2
     dispatch("find_orders", {"email": "nobody@example.com"}, out)
@@ -213,6 +215,7 @@ def test_not_received_is_never_refunded():
 def test_customer_claim_overrides_the_models_reason():
     from bookly.tools import Outcome, dispatch
     out = Outcome()
+    out.verified_emails.add("sam@example.com")
     out.claim = "not_received"
     r = dispatch("start_return", {"order_id": "BK-10231", "reason": "unwanted"}, out)
     assert r["code"] == "delivery_dispute" and r["reason"] == "not_received" and "note" in r
@@ -220,6 +223,7 @@ def test_customer_claim_overrides_the_models_reason():
     r = dispatch("check_return_eligibility", {"order_id": "BK-10231"}, out)
     assert r["code"] == "delivery_dispute"
     out2 = Outcome()
+    out2.verified_emails.add("sam@example.com")
     out2.claim = "damaged"
     r = dispatch("check_return_eligibility", {"order_id": "BK-10231"}, out2)
     assert r["code"] == "eligible" and r["reason"] == "damaged"
@@ -341,6 +345,7 @@ def test_grader_sees_what_the_tools_returned():
             return types.SimpleNamespace(content=[block], usage=u)
 
     agent = Agent(_client=Scripted())
+    agent.outcome.verified_emails.add("sam@example.com")
     agent.say("sam@example.com")
     agent.say("The Idiot")
     assert agent.last_trace.checked_against_policy
@@ -367,9 +372,54 @@ def test_moderation_timeout_falls_back_instead_of_crashing():
         os.environ["BOOKLY_MODERATION"] = "off"
 
 
+def test_fourth_gate_account_data_needs_a_verified_email():
+    from bookly.backend import verification_code
+    from bookly.tools import Outcome, dispatch
+    out = Outcome()
+    for name, args in (("find_orders", {"email": "sam@example.com"}),
+                       ("get_order_status", {"order_id": "BK-10231"}),
+                       ("check_return_eligibility", {"order_id": "BK-10231"}),
+                       ("start_return", {"order_id": "BK-10231", "reason": "damaged"})):
+        r = dispatch(name, args, out)
+        assert r.get("error") == "not_verified", (name, r)
+    assert out.gate_refusals == 4 and out.account_reads == 0 and not out.refunds
+
+    r = dispatch("send_verification_code", {"email": "sam@example.com"}, out)
+    assert r["sent"] and "code" not in json.dumps(r).lower().replace("code is in its inbox", "")
+    assert out.mock_inbox == [("sam@example.com", verification_code("sam@example.com"))]
+    assert verification_code("sam@example.com") not in json.dumps(out.tool_results), \
+        "the code must never appear in anything the model can read"
+
+    r = dispatch("verify_code", {"email": "sam@example.com", "code": "000000"}, out)
+    assert not r["verified"] and not out.verified_emails
+    r = dispatch("verify_code", {"email": "sam@example.com",
+                                 "code": verification_code("sam@example.com")}, out)
+    assert r["verified"] and out.verified_emails == {"sam@example.com"}
+    r = dispatch("get_order_status", {"order_id": "BK-10231"}, out)
+    assert r["title"] == "The Idiot" and out.account_reads == 1
+
+    # someone else's order and a non-existent order read the same
+    other = dispatch("get_order_status", {"order_id": "BK-10250"}, out)
+    ghost = dispatch("get_order_status", {"order_id": "BK-99999"}, out)
+    assert other == ghost and other["error"] == "unknown_order"
+
+
+def test_three_wrong_codes_then_no_more_attempts():
+    from bookly.backend import verification_code
+    from bookly.tools import MAX_CODE_ATTEMPTS, Outcome, dispatch
+    out = Outcome()
+    dispatch("send_verification_code", {"email": "sam@example.com"}, out)
+    for _ in range(MAX_CODE_ATTEMPTS):
+        assert not dispatch("verify_code", {"email": "sam@example.com", "code": "1"}, out)["verified"]
+    r = dispatch("verify_code", {"email": "sam@example.com",
+                                 "code": verification_code("sam@example.com")}, out)
+    assert not r["verified"] and "Hand over" in r["note"]
+
+
 def test_start_return_records_the_decision():
     from bookly.tools import Outcome, dispatch
     out = Outcome()
+    out.verified_emails.add("sam@example.com")
     r = dispatch("start_return", {"order_id": "BK-10231", "reason": "not_received"}, out)
     assert r["code"] == "delivery_dispute" and not out.refunds
     r = dispatch("start_return", {"order_id": "BK-10231", "reason": "damaged"}, out)

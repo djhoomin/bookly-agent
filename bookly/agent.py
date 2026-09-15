@@ -29,13 +29,18 @@ How to work:
   amount or policy from memory: look it up.
 - Never construct an email address or an order ID. If the customer has not given one,
   ask for it. A first name is not an identifier.
+- Before reading anything on an account, verify it: send a code to the customer's email,
+  ask them to read it back, verify it. An order number alone is not access. You never see
+  the code and must never state one.
 - Before doing anything that changes state, be certain which order you are acting on.
   If more than one order could match, ask the customer which one. Asking is cheap and
   acting on the wrong order is not. Once the order is certain and the customer has
   asked for the return, start it; their request is the confirmation.
 - Eligibility for returns is decided by Bookly policy through the tools, not by you.
   Check it before saying anything about whether an order can be refunded, even when
-  the order status looks conclusive. Report the decision and explain it plainly. Do not argue with it, apologise for it
+  the order status looks conclusive. Check first; do not ask the customer why they
+  want a refund before checking, since the answer rarely depends on it. Report the
+  decision and explain it plainly. Do not argue with it, apologise for it
   at length, or imply you could make an exception.
 - When policy blocks something the customer wants, say so once, say why, and offer to
   put them through to a person.
@@ -136,6 +141,8 @@ class Agent:
             if triage.claim != "none" and self.outcome.claim != "not_received":
                 self.outcome.claim = triage.claim
             trace.claim = self.outcome.claim
+        gate_before = self.outcome.gate_refusals
+        reads_before = self.outcome.account_reads
 
         self.history.append(Turn("user", text))
 
@@ -168,6 +175,9 @@ class Agent:
                 trace.held_on_ambiguity = (
                     len(self.outcome.ambiguities) > before_ambiguities
                     and not trace.state_changed)
+                trace.verified = sorted(self.outcome.verified_emails)
+                trace.gate_refusals = self.outcome.gate_refusals - gate_before
+                trace.account_reads = self.outcome.account_reads - reads_before
                 trace.latency_ms = int((time.monotonic() - started) * 1000)
                 trace.write()
                 self.last_trace = trace

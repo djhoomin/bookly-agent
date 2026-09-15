@@ -119,7 +119,10 @@ def build_client(provider: Provider | None = None):
     if provider.name == "anthropic":
         import anthropic
 
-        return anthropic.Anthropic()
+        # A support turn that has not answered in a minute is not going to.
+        # Fail the call so the runner records an error instead of hanging a
+        # whole evaluation on one stalled connection, which happened once.
+        return anthropic.Anthropic(timeout=60.0, max_retries=2)
 
     from .openai_bridge import OpenAICompatClient
 

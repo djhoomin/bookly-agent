@@ -61,6 +61,11 @@ class TurnTrace:
     escalated: bool = False
     #: a person already owned the conversation: no model call was made
     handed_over: bool = False
+    #: the fourth gate: addresses verified by code so far, refusals this turn
+    #: because an account was not verified, and account reads this turn
+    verified: list[str] = field(default_factory=list)
+    gate_refusals: int = 0
+    account_reads: int = 0
     #: find_orders returned more than one match and no state changed: the gate
     #: held. Usually that means the agent asked which; it can also mean it found
     #: nothing matching and said so. Either way it did not guess.

@@ -16,7 +16,7 @@
   html,body{height:100%;margin:0}
   body{background:var(--paper);color:var(--ink);font:14px/1.45 system-ui,-apple-system,"Segoe UI",sans-serif;
        display:grid;grid-template-rows:auto 1fr;height:100vh}
-  header{display:flex;align-items:baseline;justify-content:space-between;gap:16px;
+  header{display:flex;align-items:center;justify-content:space-between;gap:16px;flex-wrap:wrap;
          padding:14px 22px;border-bottom:1px solid var(--rule);background:var(--panel)}
   header h1{font:500 22px/1 var(--serif);margin:0;letter-spacing:.01em}
   header h1 span{color:var(--muted);font-size:14px;font-family:system-ui,sans-serif;margin-left:10px}
@@ -43,6 +43,9 @@
   .msg.bot code{background:var(--paper)}
   .msg .who{display:block;font:10.5px/1 var(--mono);letter-spacing:.08em;text-transform:uppercase;color:var(--muted);margin-bottom:6px}
   .msg.err{align-self:stretch;background:var(--deny-bg);color:var(--deny);font-family:var(--mono);font-size:12px}
+  .inbox{align-self:stretch;max-width:100%;background:var(--triage-bg);border:1px dashed var(--triage);border-radius:8px;padding:10px 14px;font-size:13px;color:var(--triage)}
+  .inbox .who{color:var(--triage)}
+  .inbox code{font:14px var(--mono);letter-spacing:.12em;background:var(--panel);padding:2px 8px;border-radius:4px;cursor:pointer}
   .chips{display:flex;flex-wrap:wrap;gap:6px;padding:8px 22px;border-top:1px solid var(--rule)}
   .chips button{background:var(--panel);border:1px solid var(--rule);border-radius:14px;padding:4px 11px;
                 font:12.5px system-ui,sans-serif;color:var(--ink);cursor:pointer}
@@ -79,8 +82,11 @@
 </head>
 <body>
 <header>
-  <h1>Bookly support <span>the agent on the left, what it decided on the right</span></h1>
-  <div id="meta"><span class="pill plain">connecting</span></div>
+  <h1>Bookly support</h1>
+  <div style="display:flex;flex-wrap:wrap;gap:6px;justify-content:flex-end;align-items:center">
+    <div id="meta"><span class="pill plain">connecting</span></div>
+    <div id="verified"><span class="pill plain">no account verified</span></div>
+  </div>
 </header>
 <main>
   <section class="chat">
@@ -167,6 +173,16 @@ async function meta(){
     ` <span class="pill plain" title="Orders, refunds, tickets and carrier data are a dict. No money moves, nobody is paged.">mock backend: ${m.orders} orders</span>`;
 }
 
+function addInbox(email, code){
+  // The customer's inbox, mocked. Shown in the chat column because that is
+  // where the customer would look; the model never receives this.
+  const d = document.createElement("div");
+  d.className = "msg inbox";
+  d.innerHTML = `<span class="who">mock inbox for ${esc(email)}</span>Your Bookly verification code is <code title="click to use">${esc(code)}</code>. It is only valid in this conversation.`;
+  d.querySelector("code").addEventListener("click", () => { $("text").value = code; $("text").focus(); });
+  $("log").appendChild(d); $("log").scrollTop = $("log").scrollHeight;
+}
+
 function add(who, text, cls){
   const d = document.createElement("div");
   d.className = "msg " + (cls || (who === "you" ? "you" : "bot"));
@@ -225,6 +241,12 @@ function renderTools(tools, triage){
     } else if("found" in r){
       res = `found ${r.found}` + (r.orders||[]).map(o => ` · <span class="pill plain">${esc(o.order_id)}</span> ${esc(o.title)}`).join("") +
             (r.note ? `<br>${esc(r.note)}` : "");
+    } else if("sent" in r){
+      res = r.sent ? `<span class="pill triage">code sent</span> ${esc(r.note)}` : `<span class="pill deny">not sent</span> ${esc(r.note)}`;
+    } else if("verified" in r){
+      res = r.verified ? `<span class="pill allow">verified</span> ${esc(r.note)}` : `<span class="pill deny">not verified</span> ${esc(r.note)}`;
+    } else if(r.error === "not_verified"){
+      res = `<span class="pill deny">gate: not verified</span> ${esc(r.note||"")}`;
     } else if(r.escalated){
       res = `<span class="pill deny">handed to a human</span> ticket ${esc(r.ticket)}`;
     } else if(r.error){
@@ -285,6 +307,10 @@ async function send(text){
     const d = await r.json();
     if(d.error){ thinking.remove(); add("error", d.error, "err"); return; }
     thinking.innerHTML = `<span class="who">bookly</span>${md(d.reply)}`;
+    (d.inbox || []).forEach(m => addInbox(m.email, m.code));
+    $("verified").innerHTML = (d.verified || []).length
+      ? `<span class="pill allow">verified: ${esc(d.verified.join(", "))}</span>`
+      : `<span class="pill plain">no account verified</span>`;
     renderTriage(d.triage, d.model); renderTools(d.tools, d.triage); renderOutcome(d); renderTraceRow(d);
     if(d.escalations.length || (d.trace && d.trace.handed_over)){
       const t = d.escalations.length ? d.escalations[0].ticket : "";
@@ -299,6 +325,7 @@ $("form").addEventListener("submit", e => { e.preventDefault(); const t = $("tex
 $("reset").addEventListener("click", async () => {
   const m = await (await fetch("/api/reset", {method:"POST", headers:{"Content-Type":"application/json"}, body: JSON.stringify({session})})).json();
   session = m.session; $("log").innerHTML = ""; $("trace").innerHTML = "";
+  $("verified").innerHTML = `<span class="pill plain">no account verified</span>`;
   $("notice").className = "notice";
   $("notice").innerHTML = `<b>You are chatting with Bookly's AI assistant.</b> It can look up your orders, start a return, and answer questions from Bookly's published policies. It cannot make exceptions. You can ask for a person at any time.`;
   $("triage").innerHTML = `<span class="empty">New conversation.</span>`;

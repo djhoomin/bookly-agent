@@ -131,5 +131,5 @@ class OpenAICompatClient:
     def __init__(self, base_url: str, api_key: str):
         from openai import OpenAI
 
-        self._inner = OpenAI(base_url=base_url, api_key=api_key)
+        self._inner = OpenAI(base_url=base_url, api_key=api_key, timeout=60.0, max_retries=2)
         self.messages = _Messages(self._inner)
