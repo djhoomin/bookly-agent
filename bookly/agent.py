@@ -258,7 +258,8 @@ class Agent:
             return reply
         trace.policy_misses = [t for t, src in zip(self._policy_topics_this_turn, sources)
                                if not src]
-        verdict, usage = ground(self.client, self.provider.model("light"), reply, sources)
+        verdict, usage = ground(self.client, self.provider.model("light"), reply, sources,
+                                self.outcome.tool_results)
         self.usage.append(usage)
         trace.grounded = verdict.grounded
         trace.unsupported = list(verdict.unsupported)

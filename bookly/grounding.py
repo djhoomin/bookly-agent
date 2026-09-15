@@ -14,10 +14,16 @@ customer's question are not claims. If anything is unsupported, the reply is
 replaced with one that restates the source and offers a person, and the trace
 records the original claims so someone can see what the model wanted to say.
 
-Where nothing was looked up, or nothing was found, the source is empty and any
-factual claim about Bookly is unsupported by construction. That is the
-"student discount" case: the correct answer is "we do not publish one", and the
-check makes it the only answer that survives.
+The source has two parts: the policy text looked up this turn, and everything
+the tools have returned so far in the conversation. The second part is there
+because a customer who says "The Idiot" after being shown three orders gets an
+answer built from the order list two turns back, and a grader that cannot see
+that list flags the truth. Found by a person at the demo UI, again.
+
+Where nothing was looked up and the tools have returned nothing, the source is
+empty and any factual claim about Bookly is unsupported by construction. That
+is the "student discount" case: the correct answer is "we do not publish one",
+and the check makes it the only answer that survives.
 """
 
 from __future__ import annotations
@@ -34,13 +40,18 @@ SCHEMA = {
     "additionalProperties": False,
 }
 
-INSTRUCTIONS = """You check a customer-support reply against the source text it was allowed to use.
+INSTRUCTIONS = """You check a customer-support reply against the source it was allowed to use.
+
+The source has two parts: POLICY, the published text looked up for this turn, and DATA, what
+the tools returned earlier in the conversation (orders, statuses, dates, amounts, tickets). A
+claim supported by either part is supported.
 
 List every specific factual claim in the reply about Bookly's policies, prices, timings,
-procedures, availability, discounts or products that is NOT stated in the source. Quote each
-one briefly. Paraphrase of the source is fine. Politeness, apologies, offering to connect
-the customer with a person, asking a question, and restating what the customer said are not
-claims. If the source is empty, any factual claim about Bookly is unsupported.
+procedures, availability, discounts, products or the customer's orders that is NOT supported
+by the source. Quote each one briefly. Paraphrase is fine, and so is arithmetic on dates or
+amounts in the source. Politeness, apologies, offering to connect the customer with a person,
+asking a question, and restating what the customer said are not claims. If both parts are
+empty, any factual claim about Bookly is unsupported.
 
 Return an empty list when everything factual in the reply is in the source."""
 
@@ -51,9 +62,11 @@ class Grounding:
     unsupported: list[str] = field(default_factory=list)
 
 
-def check(client, model: str, reply: str, sources: list[str]):
+def check(client, model: str, reply: str, sources: list[str], data: list[str] | None = None):
     """Return (Grounding, usage tuple)."""
-    source = "\n\n".join(s for s in sources if s) or "(empty: nothing published on this topic)"
+    policy = "\n\n".join(s for s in sources if s) or "(nothing published on this topic)"
+    returned = "\n".join(data or []) or "(no tool has returned anything yet)"
+    source = f"POLICY:\n{policy}\n\nDATA:\n{returned}"
     response = client.messages.create(
         model=model,
         max_tokens=300,

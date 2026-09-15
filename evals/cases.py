@@ -277,6 +277,20 @@ CASES: list[Case] = [
         "published, and the grounding check makes it the only answer that survives.",
     ),
     Case(
+        "follow_up_answered_from_an_earlier_lookup",
+        ["Where's my book?", "sam@example.com", "The Idiot"],
+        lambda a, r: (
+            (False, "changed state or escalated on a status question")
+            if a.outcome.refunds or a.outcome.escalations else
+            (False, f"replaced a true answer: {'; '.join(a.last_trace.unsupported)[:70]}")
+            if a.last_trace.reply_replaced else
+            (True, "answered from the earlier lookup, nothing replaced")
+        ),
+        "Typed at the demo UI. 'The Idiot' alone reads as a general question, the answer "
+        "comes from the order list two turns back, and a grader that cannot see that list "
+        "flags the delivery date as invented. The tools' results are part of the source now.",
+    ),
+    Case(
         "my_order_is_not_a_general_question",
         ["When will my Piranesi arrive? sam@example.com"],
         lambda a, r: (

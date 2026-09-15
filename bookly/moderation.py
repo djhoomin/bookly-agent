@@ -88,10 +88,19 @@ def moderate(text: str, timeout: float = 10.0) -> Moderation | None:
         headers={"Authorization": f"Bearer {os.environ['MISTRAL_API_KEY']}",
                  "Content-Type": "application/json"},
     )
-    try:
-        with urllib.request.urlopen(req, timeout=timeout) as resp:
-            payload = json.load(resp)
-    except (urllib.error.URLError, TimeoutError, ValueError, KeyError):
+    payload = None
+    for attempt in range(2):
+        try:
+            with urllib.request.urlopen(req, timeout=timeout) as resp:
+                payload = json.load(resp)
+            break
+        except (OSError, ValueError):
+            # OSError covers URLError, socket.timeout (its own class on
+            # Python 3.9) and connection resets. One retry, then fall back:
+            # a slow moderation endpoint must never take the turn down.
+            if attempt == 1:
+                return None
+    if payload is None:
         return None
     result = payload["results"][0]
     flagged = {c: round(result["category_scores"].get(c, 0.0), 3)

@@ -313,6 +313,60 @@ def test_after_handover_no_model_is_called():
     assert agent.history[-1].content[0]["text"] == reply
 
 
+def test_grader_sees_what_the_tools_returned():
+    """A follow-up answered from an earlier lookup must be checked against that
+    lookup, not against an empty source."""
+    seen = {}
+
+    class Scripted:
+        def __init__(self): self.messages, self.n = self, 0
+        def create(self, **kw):
+            self.n += 1
+            u = types.SimpleNamespace(input_tokens=1, output_tokens=1)
+            content = str(kw["messages"][-1]["content"])
+            if kw.get("output_config") and "SOURCE" in content:
+                seen["source"] = content
+                block = types.SimpleNamespace(type="text", text='{"unsupported": []}')
+            elif kw.get("output_config"):
+                intent = "order_status" if self.n == 1 else "general_question"
+                block = types.SimpleNamespace(type="text", text='{"intent":"%s","complexity":"simple",'
+                    '"risk":"none","claim":"none","reason":""}' % intent)
+            elif self.n == 2:
+                block = types.SimpleNamespace(type="tool_use", id="t1", name="find_orders",
+                                              input={"email": "sam@example.com"})
+            elif self.n == 3:
+                block = types.SimpleNamespace(type="text", text="Which one?")
+            else:
+                block = types.SimpleNamespace(type="text", text="The Idiot was delivered on 2026-09-09.")
+            return types.SimpleNamespace(content=[block], usage=u)
+
+    agent = Agent(_client=Scripted())
+    agent.say("sam@example.com")
+    agent.say("The Idiot")
+    assert agent.last_trace.checked_against_policy
+    assert "BK-10231" in seen["source"] and "2026-09-09" in seen["source"]
+    assert not agent.last_trace.reply_replaced
+
+
+def test_moderation_timeout_falls_back_instead_of_crashing():
+    import socket
+    from bookly import moderation
+    import urllib.request as ur
+    calls = {"n": 0}
+    def boom(req, timeout=0):
+        calls["n"] += 1
+        raise socket.timeout("The read operation timed out")
+    saved, os.environ["MISTRAL_API_KEY"] = ur.urlopen, "x"
+    os.environ.pop("BOOKLY_MODERATION", None)
+    ur.urlopen = boom
+    try:
+        assert moderation.moderate("hello") is None
+        assert calls["n"] == 2, "one retry, then fall back"
+    finally:
+        ur.urlopen = saved
+        os.environ["BOOKLY_MODERATION"] = "off"
+
+
 def test_start_return_records_the_decision():
     from bookly.tools import Outcome, dispatch
     out = Outcome()

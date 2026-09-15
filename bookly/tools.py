@@ -21,6 +21,7 @@ return this" question and no reason to reason from the published prose instead.
 
 from __future__ import annotations
 
+import json
 import re
 from typing import Any
 
@@ -146,6 +147,10 @@ class Outcome:
         #: Customer messages received after a handover. None of them reached a
         #: model; they were appended to the ticket.
         self.after_handover: list[str] = []
+        #: Every tool result this conversation, serialised. The grounding check
+        #: treats these as source alongside the policy text, so a fact the
+        #: tools returned two turns ago is supported when the model repeats it.
+        self.tool_results: list[str] = []
         #: Published policy text handed to the model, one entry per lookup_policy
         #: call; empty string when nothing was published. The grounding check
         #: holds the reply to these.
@@ -178,6 +183,12 @@ def _reason(passed: str, outcome: Outcome) -> tuple[str, dict[str, str]]:
 
 
 def dispatch(name: str, args: dict[str, Any], outcome: Outcome) -> dict[str, Any]:
+    result = _dispatch(name, args, outcome)
+    outcome.tool_results.append(f"{name}: {json.dumps(result, separators=(',', ':'))}")
+    return result
+
+
+def _dispatch(name: str, args: dict[str, Any], outcome: Outcome) -> dict[str, Any]:
     outcome.calls.append(name)
     outcome.invocations.append((name, dict(args)))
 
