@@ -284,7 +284,7 @@ if age &gt; RETURN_WINDOW_DAYS:
     <div class="stack" style="justify-content:space-between">
       <div class="stack" style="gap:10px">
         <div class="big" style="font-size:42px">21 / 21<span class="sub">routing on, cold, no
-          retries. Five start with no identifier at all. Five phrasings of eight requests, terse
+          retries. Five phrasings of eight requests, terse
           to furious, land on the same outcome 40 times of 40. The trace then answers the
           operating questions with no extra instrumentation: 86% resolved without a human, every eligibility decision
           carrying a policy code, <span class="mono">outside_window</span> &times;4,
@@ -297,16 +297,16 @@ if age &gt; RETURN_WINDOW_DAYS:
         sealed wrong approvals and left wrong refusals open. Fixed by adding a read-only
         <span class="mono">check_return_eligibility</span>, so there is an authoritative answer
         without attempting the action. Every refund decision now records a code, two previously
-        invisible refusal reasons appeared, and it came out <strong>24% cheaper</strong>: fewer
-        round trips than reading prose and reasoning about it.</p>
+        invisible refusal reasons appeared, and it came out <strong>24% cheaper</strong>.</p>
       </div>
       <div class="trade">
         <div class="label">What I would change first, given a production context</div>
-        <p style="font-size:13px">Build the eval set from real transcripts. These twenty-one test
-        failures I thought of, which is the weakest kind of test. A public adversarial set such as
-        <span class="mono">deepset/prompt-injections</span> (662 rows, Apache 2.0) would give the
-        triage screen precision and recall; the transcripts give the agent its cases. Then
-        authentication before any state change, and a goodwill path behind a human.</p>
+        <p style="font-size:13px">Build the eval set from real transcripts. The 21 cases are the beers
+        the QA engineer orders. The two holes that would have cost money or embarrassed a customer,
+        a refund on "never received" and a true delivery date replaced as invented, were found by a
+        person typing at the UI while every case was green, and became cases afterwards. Invented
+        cases only contain what you already thought of. Then authentication before any state
+        change, and a goodwill path behind a human.</p>
       </div>
     </div>
   </div>

@@ -502,10 +502,41 @@ repo. That is the point. A coding agent produces prose about the code faster tha
 the code, and the prose is what a reader sees first. The pass that catches the gap is the one
 where you stop reading the description and run the thing.
 
+## Where the holes were actually found
+
+A QA engineer walks into a bar and orders one beer, 99 beers, minus five beers and M beers.
+The first real customer walks in and asks where the bathroom is, and the bar burns down. The
+twenty-one cases in `evals/` are the beers. This is what found what, in the order it happened.
+
+| Hole | Found by | Automated cases passing at the time |
+|---|---|---|
+| Four turns refusing without consulting the policy function | the trace, read by hand | 7 / 7 |
+| The EU path had never been called | a cold read of the code | 7 / 7 |
+| "Asked before acting" was a regex, inflated fivefold | a cold read of the code | 7 / 7 |
+| Every test customer spoke like a fixture | a cold read of the tests | 7 / 7 |
+| A made-up email, `sam.piranesi@` | the five-phrasing run | 12 / 12 |
+| "Could I return it?" answered and waited | the five-phrasing run | 12 / 12 |
+| **A refund on "I never received it"** | **a person typing at the UI** | 14 / 14 |
+| Required reason made the model skip the check | the analyzer's guard | 14 / 14 |
+| The model chose a permissive reason itself | the five-phrasing run | 14 / 14 |
+| The grounder flagged three true orders as invented | the regenerated trace, read by hand | 19 / 19 |
+| **The grounder flagged a true delivery date as invented** | **a person typing at the UI** | 20 / 20 |
+| A slow moderation call crashed the turn | the regeneration run | 20 / 20 |
+| No tool for the cancellation the policy text promises | writing the mocked-versus-real list | 21 / 21 |
+
+The instruments are good at what they are for. The phrasing run catches variance, the guard
+catches a rule being bypassed, the regeneration catches regressions. What none of them found
+is the two holes in bold, which are the two that would have cost real money or produced
+real nonsense in front of a customer, and both came from a person typing something the
+cases did not contain. Every automated case was green at the time. The reason to build the
+eval set from real transcripts is not that invented cases are bad. It is that they can only
+contain what you already thought of, and the customer who asks where the bathroom is did
+not read the brief.
+
 ## What I would change first
 
-**Build the eval set from real transcripts.** Two sources replace them, and they test
-different layers.
+**Build the eval set from real transcripts.** The table above is the argument. Two sources
+replace invented cases, and they test different layers.
 
 **Real transcripts** give the agent's cases. What goes wrong in the first week of a deployment
 never looks like what you invented at a desk, and those cases are the ones that decide whether
