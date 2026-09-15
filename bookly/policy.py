@@ -43,7 +43,7 @@ def refund_eligibility(order: Order, today: date | None = None) -> Decision:
     """Decide, deterministically, whether this order can be refunded.
 
     Ordered most-specific first so the reason given to the customer is the
-    真 reason, not merely the first rule that happened to match.
+    real reason, not merely the first rule that happened to match.
     """
     today = today or TODAY
 
