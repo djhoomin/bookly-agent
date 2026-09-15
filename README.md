@@ -55,7 +55,7 @@ shape what you see:
 
 - **The clock is frozen** at 14 September 2026 in `backend.py`, so "delivered 5 days ago" stays
   true and the eval set stays deterministic.
-- **The backend is a dict.** Five orders, two customers, three policy notes. Everything
+- **The backend is a dict.** Five orders, two customers, four policy notes. Everything
   interesting lives in `policy.py`, and the mock is deliberately dumb so the surface is honest
   about what has and has not been built.
 - **An email address identifies a customer and does not authenticate them.** See the decisions
@@ -66,6 +66,26 @@ shape what you see:
   code path for one.
 - **Prices are list, in USD; orders are in EUR.** Cost figures are computed from measured tokens
   at Anthropic's published rates and Mistral's published rate of zero for moderation.
+
+## What is real and what is mocked
+
+So a reviewer watching a refund complete knows what actually happened.
+
+| Real | Mocked |
+|---|---|
+| Every model call: triage, resolution, grounding, on Anthropic or OpenRouter | The order database: five orders on two accounts, in a dict |
+| Mistral moderation, live, on every turn | Refunds: `start_return` records a refund and returns a confirmation number; no payment system is called |
+| The policy function and every verdict it returns | Escalation: a ticket number is generated locally; no queue exists and no person is paged |
+| Tool orchestration, the gate, the claim override, the handover stop | Carrier data: `delivered_on` is a field on the order; there is no carrier API and no trace can be raised |
+| The trace, the analyzer, the abuse log | Policy text: four strings; a real deployment would retrieve these |
+| Cost figures, from measured tokens at list prices | Identity: an email address looks up an account and proves nothing |
+| The EU-pinned run and the model-swap run | Password reset: the published procedure is quoted; no email is sent |
+| | The clock, frozen at 14 September 2026 |
+
+What the agent cannot do, by design or by omission: cancel an order (the policy text
+mentions cancellation and there is no tool for it, so the agent can say it is possible and
+cannot do it), change a delivery address, grant a goodwill exception, handle more than one
+return in a request, or answer anything the four policy notes do not cover.
 
 ## How it is put together
 

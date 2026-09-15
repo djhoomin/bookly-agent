@@ -16,6 +16,7 @@ from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from pathlib import Path
 
 from .agent import Agent
+from .backend import ORDERS
 from .moderation import MODEL as MODERATION_MODEL, enabled as moderation_enabled
 from .providers import active
 
@@ -72,6 +73,7 @@ class Handler(BaseHTTPRequestHandler):
             return self._json({"provider": p.name, "residency": p.residency,
                                "heavy": p.model("heavy"), "light": p.model("light"),
                                "moderation": MODERATION_MODEL if moderation_enabled() else "",
+                               "orders": len(ORDERS),
                                "session": uuid.uuid4().hex})
         body = PAGE.read_bytes()
         self.send_response(200)

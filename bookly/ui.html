@@ -133,7 +133,8 @@ async function meta(){
     `<span class="pill ${eu ? "allow" : "plain"}">${esc(m.provider)}</span> ` +
     `<span class="pill plain" title="${esc(m.residency)}">${esc(m.residency.split(".")[0])}</span> ` +
     `<span class="pill triage">${esc(bare(m.light))} → ${esc(bare(m.heavy))}</span> ` +
-    (m.moderation ? `<span class="pill allow">${esc(m.moderation)}</span>` : `<span class="pill deny">no moderation key</span>`);
+    (m.moderation ? `<span class="pill allow">${esc(m.moderation)}</span>` : `<span class="pill deny">no moderation key</span>`) +
+    ` <span class="pill plain" title="Orders, refunds, tickets and carrier data are a dict. No money moves, nobody is paged.">mock backend: ${m.orders} orders</span>`;
 }
 
 function add(who, text, cls){
