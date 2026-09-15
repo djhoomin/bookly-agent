@@ -26,8 +26,31 @@ from __future__ import annotations
 
 import os
 from dataclasses import dataclass
+from pathlib import Path
 
 DEFAULT = "anthropic"
+
+
+def _load_dotenv(path: Path | None = None) -> None:
+    """Read KEY=value lines from .env at the repo root into the environment.
+
+    Only keys not already set, so a real environment always wins. No
+    dependency, no interpolation, no surprises: a key, an equals sign, a value.
+    """
+    path = path or Path(__file__).resolve().parent.parent / ".env"
+    if not path.exists():
+        return
+    for line in path.read_text().splitlines():
+        line = line.strip()
+        if not line or line.startswith("#") or "=" not in line:
+            continue
+        key, value = line.split("=", 1)
+        key, value = key.strip(), value.strip().strip("'\"")
+        if key and value and key not in os.environ:
+            os.environ[key] = value
+
+
+_load_dotenv()
 
 #: Model identifiers differ by gateway. Anthropic's own IDs are bare; OpenRouter
 #: namespaces them by vendor.
