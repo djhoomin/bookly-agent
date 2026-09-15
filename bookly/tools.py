@@ -143,6 +143,9 @@ class Outcome:
         self.calls: list[str] = []
         #: Every policy code returned this conversation, in order.
         self.decisions: list[str] = []
+        #: Customer messages received after a handover. None of them reached a
+        #: model; they were appended to the ticket.
+        self.after_handover: list[str] = []
         #: Published policy text handed to the model, one entry per lookup_policy
         #: call; empty string when nothing was published. The grounding check
         #: holds the reply to these.
@@ -251,8 +254,10 @@ def dispatch(name: str, args: dict[str, Any], outcome: Outcome) -> dict[str, Any
         return {"topic": key, "found": True, "text": text}
 
     if name == "escalate_to_human":
-        outcome.escalations.append(dict(args))
-        return {"escalated": True, "ticket": "HUM-4471",
-                "note": "A human agent will pick this up. Tell the customer."}
+        ticket = f"HUM-{4470 + len(outcome.escalations) + 1}"
+        outcome.escalations.append({**args, "ticket": ticket})
+        return {"escalated": True, "ticket": ticket,
+                "note": "A human agent will pick this up. Tell the customer, and tell them "
+                        "the conversation is with that person from here."}
 
     return {"error": "unknown_tool"}

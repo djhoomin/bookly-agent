@@ -146,6 +146,12 @@ function add(who, text, cls){
 }
 
 function renderTriage(t, model){
+  if(t && t.reason && t.reason.startsWith("after handover")){
+    $("triage").innerHTML = `<div class="screen"><div class="who">${esc(META.moderation || "moderation")}<small>abuse</small></div><div class="said">` +
+      (Object.keys(t.moderation||{}).length ? Object.entries(t.moderation).map(([c,s]) => `<span class="pill deny">${esc(c)} ${Number(s).toFixed(2)}</span>`).join("") : `<span class="pill allow">clean</span>`) +
+      `</div></div><p>Routing skipped: a person owns this conversation, so no model tier was chosen.</p>`;
+    return;
+  }
   if(!t){ $("triage").innerHTML = `<span class="empty">Routing off: every turn on ${esc(bare(model))}.</span>`; return; }
   // Two screeners, each named, each with what it said. Haiku routes and keeps
   // bookstore fraud; Mistral decides abuse and self-harm when it ran.
@@ -206,7 +212,9 @@ function renderTools(tools, triage){
 function renderOutcome(d){
   const tr = d.trace || {};
   let html;
-  if(d.refunds.length){
+  if(tr.handed_over){
+    html = `<div class="outcome">A person owns this conversation</div><p>No model was called. The message went onto the ticket, moderation still ran, and nothing the customer says from here can move state.</p>`;
+  } else if(d.refunds.length){
     const r = d.refunds[0];
     html = `<div class="outcome">Refund issued: ${esc(r.order_id)}, EUR ${esc(r.refund_eur)}</div><p>State changed. This is the only tool that can, and it decided eligibility itself.</p>`;
   } else if(d.escalations.length){
@@ -228,7 +236,7 @@ function renderOutcome(d){
 function renderTraceRow(d){
   const tr = d.trace || {};
   const codes = [...new Set(tr.policy_codes||[])];
-  const state = tr.state_changed ? `<span class="pill allow">refund</span>` : tr.escalated ? `<span class="pill deny">human</span>` : tr.held_on_ambiguity ? `<span class="pill triage">asked</span>` : tr.reply_replaced ? `<span class="pill deny">replaced</span>` : tr.checked_against_policy ? `<span class="pill allow">grounded</span>` : "";
+  const state = tr.handed_over ? `<span class="pill plain">no call</span>` : tr.state_changed ? `<span class="pill allow">refund</span>` : tr.escalated ? `<span class="pill deny">human</span>` : tr.held_on_ambiguity ? `<span class="pill triage">asked</span>` : tr.reply_replaced ? `<span class="pill deny">replaced</span>` : tr.checked_against_policy ? `<span class="pill allow">grounded</span>` : "";
   const row = document.createElement("tr");
   row.innerHTML = `<td>${d.turn}</td><td class="m">${esc(bare(d.model))}</td><td class="m">${esc((tr.tools||[]).join(" → "))}</td>` +
                   `<td class="m">${esc(codes.join(", "))}</td><td>${state}</td><td>${(tr.usd||0).toFixed(4)}</td><td>${tr.latency_ms||""}</td>`;

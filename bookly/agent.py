@@ -19,7 +19,8 @@ from .providers import active, build_client
 from .tools import TOOLS, Outcome, dispatch
 from .trace import TurnTrace
 from .grounding import check as ground, fallback
-from .triage import log_flagged, screen
+from .moderation import moderate
+from .triage import Triage, log_flagged, screen
 
 SYSTEM = """You are Bookly's customer support agent. Bookly is an online bookstore.
 
@@ -114,6 +115,9 @@ class Agent:
         self._tools_this_turn: list[str] = []
         usage_start = len(self.usage)
 
+        if self.outcome.escalations:
+            return self._after_handover(text, trace, started)
+
         model = self.model or self.provider.model("heavy")
         if self.route:
             triage, rows = screen(self.client, text, model=self.provider.model("light"))
@@ -200,6 +204,42 @@ class Agent:
         self.last_trace = trace
         return ("I am having trouble completing that. Let me put you through to a "
                 "colleague who can help.")
+
+    def _after_handover(self, text: str, trace: TurnTrace, started: float) -> str:
+        """Once a person owns the conversation, the agent stops.
+
+        No model call, no tools, no state. The customer gets a fixed reply
+        with the ticket number and the message is appended to the ticket for
+        the person to read. Moderation still runs, because a threat made
+        after handover is exactly what the trust and safety log is for, and
+        the endpoint is free. This closes the obvious abuse path: keep the
+        bot talking after it has handed over and see what it can be pushed
+        into. There is nothing left to push.
+        """
+        import time
+
+        ticket = self.outcome.escalations[-1].get("ticket", "")
+        self.history.append(Turn("user", text))
+        verdict = moderate(text)
+        if verdict is not None:
+            triage = Triage(intent="other", complexity="simple", risk=verdict.risk,
+                            reason=f"after handover; mistral: {verdict.reason or 'clean'}",
+                            screener="mistral" if verdict.risk != "none" else "haiku",
+                            moderated=True, moderation=verdict.flagged)
+            self.triages.append(triage)
+            log_flagged(triage, text, self.conversation_id)
+            trace.risk, trace.screener = triage.risk, triage.screener
+            trace.moderated, trace.moderation = True, dict(verdict.flagged)
+        reply = (f"A colleague has this conversation now, ticket {ticket}, and will reply "
+                 "here. I have added your message to the ticket so they see it.")
+        self.history.append(Turn("assistant", [{"type": "text", "text": reply}]))
+        self.outcome.after_handover.append(text)
+        trace.intent = "other"
+        trace.handed_over = True
+        trace.latency_ms = int((time.monotonic() - started) * 1000)
+        trace.write()
+        self.last_trace = trace
+        return reply
 
     def _ground(self, reply: str, trace: TurnTrace, before_sources: int) -> str:
         """Hold a general-question reply to the published text it looked up.

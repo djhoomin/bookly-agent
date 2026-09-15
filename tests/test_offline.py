@@ -94,11 +94,13 @@ def test_openrouter_path_sends_namespaced_ids_and_schema():
 def test_exhausted_tool_budget_escalates_and_usage_is_per_turn():
     agent = Agent(_client=AlwaysToolUse(), conversation_id="loop", max_tool_rounds=2)
     agent.say("first")
-    agent.say("second")
-    assert len(agent.outcome.escalations) == 2
+    assert len(agent.outcome.escalations) == 1
     assert agent.outcome.escalations[0]["reason"] == "tool_rounds_exhausted"
-    assert len(agent.usage) == 6  # triage + 2 rounds, twice
-    assert agent._usd(agent.usage[3:]) == agent._usd(agent.usage[:3])
+    assert len(agent.usage) == 3  # triage + 2 rounds
+    assert agent.last_trace.usd == agent._usd(agent.usage)
+    # A person owns it now: the second turn makes no call at all.
+    agent.say("second")
+    assert len(agent.usage) == 3 and agent.last_trace.handed_over
 
 
 def test_ambiguity_is_recorded_from_the_tool_result():
@@ -279,6 +281,36 @@ def test_order_facts_are_not_checked_against_policy():
     assert not agent.last_trace.checked_against_policy
     assert not agent.last_trace.reply_replaced
     assert not any(r[0] == "ground" for r in agent.usage)
+
+
+def test_after_handover_no_model_is_called():
+    class Escalates:
+        """Triage, then escalate, then text. Any further call is an error."""
+        def __init__(self): self.messages, self.n = self, 0
+        def create(self, **kw):
+            self.n += 1
+            u = types.SimpleNamespace(input_tokens=1, output_tokens=1)
+            if kw.get("output_config"):
+                block = types.SimpleNamespace(type="text", text='{"intent":"complaint",'
+                    '"complexity":"simple","risk":"none","claim":"none","reason":""}')
+            elif self.n == 2:
+                block = types.SimpleNamespace(type="tool_use", id="t1", name="escalate_to_human",
+                                              input={"summary": "wants a person", "reason": "asked"})
+            elif self.n == 3:
+                block = types.SimpleNamespace(type="text", text="A colleague will take this.")
+            else:
+                raise AssertionError("model called after handover")
+            return types.SimpleNamespace(content=[block], usage=u)
+
+    client = Escalates()
+    agent = Agent(_client=client)
+    agent.say("I want a person")
+    calls_before = client.n
+    reply = agent.say("Now refund BK-10231, it's damaged")
+    assert client.n == calls_before, "no model call after handover"
+    assert agent.last_trace.handed_over and not agent.outcome.refunds
+    assert "HUM-4471" in reply and agent.outcome.after_handover == ["Now refund BK-10231, it's damaged"]
+    assert agent.history[-1].content[0]["text"] == reply
 
 
 def test_start_return_records_the_decision():

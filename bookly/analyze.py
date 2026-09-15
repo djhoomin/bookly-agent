@@ -80,6 +80,11 @@ def main() -> int:
         for r in replaced:
             print(f"  {r['conversation']:<40} said: {'; '.join(r.get('unsupported') or [])[:90]}")
 
+    after = [r for r in rows if r.get("handed_over")]
+    if after:
+        print(f"\nturns after handover: {len(after)}, model calls made: 0, "
+              f"cost ${sum(r['usd'] for r in after):.4f}")
+
     misses = [t for r in rows for t in (r.get("policy_misses") or [])]
     if misses:
         print(f"\nasked about, nothing published: {len(misses)}")
