@@ -29,7 +29,7 @@ def main() -> int:
         except Exception as exc:  # noqa: BLE001
             print(f"[ERROR] {case.name}: {type(exc).__name__}: {exc}")
             continue
-        ok, note = case.check(agent.outcome, replies)
+        ok, note = case.check(agent, replies)
         passed += ok
         print(f"[{'PASS' if ok else 'FAIL'}] {case.name}: {note}")
         print(f"         tools: {' -> '.join(agent.outcome.calls) or 'none'}")
