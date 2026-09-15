@@ -13,9 +13,10 @@ knows enough to act before it acts.
 
 ```bash
 python -m venv .venv && .venv/bin/pip install -r requirements.txt
-export ANTHROPIC_API_KEY=...          # or: ant auth login
+cp .env.example .env                  # then fill in the keys, or: ant auth login
 .venv/bin/python -m bookly.cli        # interactive demo
 .venv/bin/python -m evals.run         # the evaluation set, live
+.venv/bin/python -m evals.variants    # five phrasings of each request, live
 .venv/bin/python -m tests.test_offline   # wiring checks, no key needed
 ```
 
@@ -96,6 +97,40 @@ one of two Dunes, and a book that belongs to a different customer. Identificatio
 is where support conversations actually go wrong, and a test set that hands the
 agent a perfect identifier in the first sentence never exercises it.
 
+### Same request, five ways
+
+`python -m evals.variants` sends five phrasings of one request through the agent: terse,
+polite, furious, rambling, facts in the wrong order, no capital letters. A scenario passes only
+if all five land on the same outcome. That turns "phrasing is not scored" from a stance into a
+measurement. If two phrasings of one request produce different outcomes, the agent is reading
+tone as fact, and reading tone as fact is what a persuasive customer exploits.
+
+```
+[CONSISTENT] outside_window_is_refused: 5/5 phrasings   (routed: 1 heavy, 4 light)
+[CONSISTENT] eligible_return_completes: 5/5 phrasings   (routed: 6 light)
+    ok  v3  refunded BK-10231 (after one confirmation)
+[CONSISTENT] digital_item_is_refused: 5/5 phrasings   (routed: 1 heavy, 4 light)
+[CONSISTENT] ambiguous_order_forces_a_question: 5/5 phrasings
+[CONSISTENT] name_is_not_an_identifier: 5/5 phrasings
+```
+
+The full report is `samples/variants.txt`. The first run did not read like that, and what it
+found is more useful than the clean sheet:
+
+- **"Could I return it?" got an answer and a wait.** Eligibility was checked and nothing was
+  started. That phrasing is a question, and answering it is not wrong, so a state-changing
+  scenario may carry one confirmation turn, and the report says when one was needed rather
+  than hiding it.
+- **The terse "It's Sam. Piranesi. Where is it?" made Haiku look up `sam.piranesi@`**, an
+  address it made up. It matched nothing, so no harm was done, and the check that caught it
+  compares every identifier the agent looks up against the customer's own words. One line in
+  the prompt and a real email pattern in the tool fixed it, and it held on the rerun. One
+  made-up address in twenty-five conversations is the number to keep in mind when reading the
+  identity paragraph above. The one to worry about is a plausible address that matches
+  somebody, which is what verification is for.
+- **The furious phrasing of the refusal went to Opus and the others to Haiku.** Same
+  outcome. Routing reads tone. The policy function does not.
+
 ## Model routing and abuse screening
 
 Every inbound turn is screened first by Claude Haiku 4.5. One call, two jobs: it picks the
@@ -106,9 +141,9 @@ Measured across the eval suite, 44 API calls, at list prices:
 
 | | Per conversation | 10,000/day | Per year |
 |---|---|---|---|
-| routed | $0.0073 | $73 | **$26,513** |
-| all Opus | $0.0238 | $238 | **$87,016** |
-| saved | **70%** | | **$60,503** |
+| routed | $0.0070 | $70 | **$25,630** |
+| all Opus | $0.0239 | $239 | **$87,367** |
+| saved | **71%** | | **$61,737** |
 
 `python -m bookly.costs` recomputes this from whatever usage you feed it, so it
 runs against production traffic rather than needing a rewrite.
@@ -176,7 +211,7 @@ why the policy function refused
 flagged turns: 1
   fraud_signal     pressure_to_bypass_policy_is_flagged
 
-cost 0.0872 USD over 12 conversations = $0.00726 each, $72.64 at 10k/day
+cost 0.0843 USD over 12 conversations = $0.00702 each, $70.22 at 10k/day
 ```
 
 The test for whether the schema is right: can someone answer "why did we refuse 41 refunds last
@@ -199,7 +234,7 @@ reason from customer-facing text. Three things followed:
   neither of which is an eligibility decision
 - it got **24% cheaper** on the accounting in use at the time, $0.01075 to $0.00817 per
   conversation, because a direct answer takes fewer round trips than reading prose and
-  reasoning about it. The per-turn accounting that replaced it (see below) reads $0.00726.
+  reasoning about it. The per-turn accounting that replaced it (see below) reads $0.00702.
 
 `analyze.py` now asserts this rather than describing it: a return question answered without
 consulting `policy.py` prints a warning.
