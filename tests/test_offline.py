@@ -109,6 +109,15 @@ def test_ambiguity_is_recorded_from_the_tool_result():
     assert len(out.ambiguities) == 1
 
 
+def test_order_ids_are_normalised():
+    from bookly.backend import get_order, normalise_order_id
+    for raw in ("bk10231", "BK 10231", "bk-10231", " Bk-10231 "):
+        assert normalise_order_id(raw) == "BK-10231", raw
+        assert get_order(raw) is not None, raw
+    assert get_order("BK-99999") is None
+    assert get_order("The Idiot") is None
+
+
 if __name__ == "__main__":
     tests = [v for k, v in sorted(globals().items()) if k.startswith("test_")]
     for t in tests:

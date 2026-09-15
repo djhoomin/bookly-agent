@@ -7,6 +7,7 @@ code rather than prose, and rules you can see are rules you can test.
 
 from __future__ import annotations
 
+import re
 from dataclasses import dataclass
 from datetime import date, timedelta
 
@@ -61,5 +62,17 @@ def find_orders_by_email(email: str) -> list[Order]:
     return [o for o in ORDERS.values() if o.email.lower() == email.lower().strip()]
 
 
+def normalise_order_id(raw: str) -> str:
+    """Customers type "bk10231", "BK 10231" and "bk-10231". All mean BK-10231.
+
+    Accepting them in code means the model does not have to notice and repair
+    the typo, and the trace records the ID the customer gave rather than one
+    the model guessed at.
+    """
+    compact = re.sub(r"[^A-Z0-9]", "", (raw or "").upper())
+    m = re.fullmatch(r"BK(\d{4,6})", compact)
+    return f"BK-{m.group(1)}" if m else (raw or "").upper().strip()
+
+
 def get_order(order_id: str) -> Order | None:
-    return ORDERS.get(order_id.upper().strip())
+    return ORDERS.get(normalise_order_id(order_id))
