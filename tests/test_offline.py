@@ -161,6 +161,39 @@ def test_fabricated_identifier_is_caught_and_probing_is_not():
     assert _asked_rather_than_guessed(agent, ["..."])[0]
 
 
+def test_moderation_mapping_ignores_pii_and_keeps_haiku_fraud(monkeypatch=None):
+    from bookly import moderation, triage
+    m = moderation.Moderation("m", {"violence_and_threats": 0.79, "hate_and_discrimination": 0.57})
+    assert m.risk == "abusive_language" and m.reason.startswith("violence_and_threats 0.79")
+    assert moderation.Moderation("m", {}).risk == "none"
+    assert moderation.Moderation("m", {"jailbreaking": 0.9}).risk == "fraud_signal"
+
+    # screen(): Mistral clean, Haiku says fraud -> fraud stands, screener recorded
+    class HaikuFraud:
+        messages = None
+        def __init__(self): self.messages = self
+        def create(self, **kw):
+            block = types.SimpleNamespace(type="text", text='{"intent":"return_refund",'
+                '"complexity":"complex","risk":"fraud_signal","reason":"claimed authority"}')
+            return types.SimpleNamespace(content=[block],
+                                         usage=types.SimpleNamespace(input_tokens=1, output_tokens=1))
+    orig = triage.__dict__.get("moderate")
+    import bookly.moderation as mod
+    saved = mod.moderate
+    mod.moderate = lambda text, timeout=10.0: moderation.Moderation("m", {}, 5)
+    try:
+        t, rows = triage.screen(HaikuFraud(), "x")
+        assert t.risk == "fraud_signal" and t.screener == "haiku" and t.moderated and len(rows) == 2
+        mod.moderate = lambda text, timeout=10.0: moderation.Moderation("m", {"violence_and_threats": 0.8}, 5)
+        t, _ = triage.screen(HaikuFraud(), "x")
+        assert t.risk == "abusive_language" and t.screener == "mistral" and "mistral:" in t.reason
+        mod.moderate = lambda text, timeout=10.0: None
+        t, rows = triage.screen(HaikuFraud(), "x")
+        assert t.screener == "haiku" and not t.moderated and len(rows) == 1
+    finally:
+        mod.moderate = saved
+
+
 if __name__ == "__main__":
     tests = [v for k, v in sorted(globals().items()) if k.startswith("test_")]
     for t in tests:

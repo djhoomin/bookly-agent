@@ -69,7 +69,14 @@ def main() -> int:
     if flagged:
         print(f"\nflagged turns: {len(flagged)}")
         for r in flagged:
-            print(f"  {r['risk']:<16} {r['conversation']}")
+            scores = ", ".join(f"{c} {s}" for c, s in (r.get("moderation") or {}).items())
+            print(f"  {r['risk']:<16} {r['conversation']:<40} "
+                  f"{r.get('screener') or 'haiku'}  {scores}")
+    moderated = sum(1 for r in rows if r.get("moderated"))
+    deciders = collections.Counter(r.get("screener") or "haiku" for r in flagged)
+    print(f"\nmoderation ran on {moderated}/{len(rows)} turns"
+          + (";  flags decided by: " + ", ".join(f"{n} {s}" for s, n in deciders.most_common())
+             if deciders else ""))
 
     models = collections.Counter(r["model"] for r in rows if r["model"])
     print("\nmodel mix")

@@ -141,7 +141,7 @@ function renderTriage(t, model){
   const risk = t.risk === "none" ? `<span class="pill plain">risk none</span>` : `<span class="pill deny">${esc(t.risk)}</span>`;
   $("triage").innerHTML =
     `<div><span class="pill triage">${esc(t.intent)}</span> <span class="pill triage">${esc(t.complexity)}</span> ${risk} ` +
-    `<span class="pill plain">→ ${esc(bare(model))}</span></div><p>${esc(t.reason)}</p>`;
+    `<span class="pill plain">→ ${esc(bare(model))}</span> <span class="pill plain">risk by ${esc(t.screener||"haiku")}</span></div><p>${esc(t.reason)}</p>`;
 }
 
 function renderTools(tools, triage){

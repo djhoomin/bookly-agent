@@ -18,7 +18,7 @@ from typing import Any, Callable
 from .providers import active, build_client
 from .tools import TOOLS, Outcome, dispatch
 from .trace import TurnTrace
-from .triage import classify, log_flagged
+from .triage import log_flagged, screen
 
 SYSTEM = """You are Bookly's customer support agent. Bookly is an online bookstore.
 
@@ -108,17 +108,17 @@ class Agent:
 
         model = self.model or self.provider.model("heavy")
         if self.route:
-            triage, tri_usage = classify(self.client, text,
-                                         model=self.provider.model("light"),
-                                         return_usage=True)
+            triage, rows = screen(self.client, text, model=self.provider.model("light"))
             self.triages.append(triage)
-            self.usage.append(("triage",) + tri_usage)
+            self.usage.extend(rows)
             log_flagged(triage, text, self.conversation_id)
             if self.on_triage:
                 self.on_triage(triage)
             model = self.model or self.provider.model(triage.tier)
             trace.intent, trace.complexity = triage.intent, triage.complexity
-            trace.risk = triage.risk
+            trace.risk, trace.screener = triage.risk, triage.screener
+            trace.moderated = triage.moderated
+            trace.moderation = dict(triage.moderation)
 
         self.history.append(Turn("user", text))
 

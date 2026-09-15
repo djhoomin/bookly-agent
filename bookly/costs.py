@@ -15,10 +15,15 @@ from pathlib import Path
 
 SAMPLE = Path(__file__).resolve().parent.parent / "samples" / "measured.json"
 
+#: Listed as "Free" on mistral.ai/pricing/api, September 2026. Kept as a row
+#: so the call is counted and a future price is one number away.
+MISTRAL_MODERATION_IN = 0.0
+
 PRICES = {  # USD per million tokens
     "claude-opus-5":   {"in": 5.00, "out": 25.00},
     "claude-sonnet-5": {"in": 2.00, "out": 10.00},
     "claude-haiku-4-5": {"in": 1.00, "out": 5.00},
+    "mistral-moderation-2603": {"in": MISTRAL_MODERATION_IN, "out": 0.0},
 }
 
 

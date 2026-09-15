@@ -43,6 +43,12 @@ class TurnTrace:
     intent: str = ""
     complexity: str = ""
     risk: str = ""
+    #: which classifier decided risk: haiku, or mistral when it flagged
+    screener: str = ""
+    #: whether Mistral moderation ran on this turn
+    moderated: bool = False
+    #: Mistral's flagged categories with scores, when it ran
+    moderation: dict = field(default_factory=dict)
     model: str = ""
     # what the agent did. Every flag here is derived from tool calls and their
     # results, never from the wording of the reply: a refusal that ends in

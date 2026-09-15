@@ -13,18 +13,17 @@ written to a log with the turn attached, which is the artifact a trust and safet
 team actually needs. Classification and screening want the same cheap pass over
 the same text, so doing them separately would be paying twice for one read.
 
-Rehearsal Studio, a product I am building with a language-training partner, uses
-Mistral's moderation endpoint for exactly this shape of job. Here the classifier
-is Haiku so the prototype stays on one vendor, and the architecture is the same:
-a small model in front, deciding what the large one is allowed to be bothered
-with.
+When a Mistral key is present, the risk half moves to Mistral's moderation
+endpoint and Haiku keeps the routing half; see moderation.py for why and for
+what each catches that the other does not. `screen()` is the one entry point
+and it records which screener produced the verdict.
 """
 
 from __future__ import annotations
 
 import json
 import os
-from dataclasses import asdict, dataclass
+from dataclasses import asdict, dataclass, field
 from datetime import datetime, timezone
 from pathlib import Path
 
@@ -74,6 +73,12 @@ class Triage:
     complexity: str
     risk: str
     reason: str
+    #: Which classifier decided `risk`: "haiku" or "mistral".
+    screener: str = "haiku"
+    #: Whether Mistral's moderation endpoint ran on this turn at all.
+    moderated: bool = False
+    #: Mistral's flagged categories and scores, when it ran.
+    moderation: dict = field(default_factory=dict)
 
     @property
     def tier(self) -> str:
@@ -119,6 +124,32 @@ def classify(client, text: str, model: str = TRIAGE_MODEL,
         return triage, (model, response.usage.input_tokens,
                         response.usage.output_tokens)
     return triage
+
+
+def screen(client, text: str, model: str = TRIAGE_MODEL):
+    """Triage by Haiku, risk by Mistral where available. Returns
+    (Triage, [usage rows])."""
+    from .moderation import MODEL as MOD_MODEL, moderate
+
+    triage, usage = classify(client, text, model=model, return_usage=True)
+    rows = [("triage",) + usage]
+    verdict = moderate(text)
+    if verdict is not None:
+        rows.append(("moderate", MOD_MODEL, verdict.prompt_tokens, 0))
+        triage.moderated = True
+        triage.moderation = verdict.flagged
+        if verdict.risk != "none":
+            triage.screener = "mistral"
+            triage.risk = verdict.risk
+            triage.reason = f"mistral: {verdict.reason}. haiku: {triage.reason}"
+        elif triage.risk == "fraud_signal":
+            # Mistral has no notion of bookstore fraud; Haiku's call stands.
+            triage.reason = f"haiku: {triage.reason} (mistral: clean)"
+        else:
+            # Mistral is the authority on abuse and self-harm; if it saw
+            # nothing, Haiku's guess in those categories does not stand.
+            triage.risk = "none"
+    return triage, rows
 
 
 def log_flagged(triage: Triage, text: str, conversation_id: str) -> None:
