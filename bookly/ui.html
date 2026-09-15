@@ -265,7 +265,9 @@ function renderTools(tools, triage){
 function renderOutcome(d){
   const tr = d.trace || {};
   let html;
-  if(tr.handed_over){
+  if(tr.safety_response){
+    html = `<div class="outcome">A person has been paged as a priority</div><p>The message carried a self-harm signal. The reply is fixed text with crisis resources, written by a person. No model was asked to answer, and none will be for the rest of this conversation.</p>`;
+  } else if(tr.handed_over){
     html = `<div class="outcome">A person owns this conversation</div><p>No model was called. The message went onto the ticket, moderation still ran, and nothing the customer says from here can move state.</p>`;
   } else if(d.refunds.length){
     const r = d.refunds[0];
@@ -289,7 +291,7 @@ function renderOutcome(d){
 function renderTraceRow(d){
   const tr = d.trace || {};
   const codes = [...new Set(tr.policy_codes||[])];
-  const state = tr.handed_over ? `<span class="pill plain">no call</span>` : tr.state_changed ? `<span class="pill allow">refund</span>` : tr.escalated ? `<span class="pill deny">human</span>` : tr.held_on_ambiguity ? `<span class="pill triage">asked</span>` : tr.reply_replaced ? `<span class="pill deny">replaced</span>` : tr.checked_against_policy ? `<span class="pill allow">grounded</span>` : "";
+  const state = tr.safety_response ? `<span class="pill deny">safety</span>` : tr.handed_over ? `<span class="pill plain">no call</span>` : tr.state_changed ? `<span class="pill allow">refund</span>` : tr.escalated ? `<span class="pill deny">human</span>` : tr.held_on_ambiguity ? `<span class="pill triage">asked</span>` : tr.reply_replaced ? `<span class="pill deny">replaced</span>` : tr.checked_against_policy ? `<span class="pill allow">grounded</span>` : "";
   const row = document.createElement("tr");
   row.innerHTML = `<td>${d.turn}</td><td class="m">${esc(bare(d.model))}</td><td class="m">${esc((tr.tools||[]).join(" → "))}</td>` +
                   `<td class="m">${esc(codes.join(", "))}</td><td>${state}</td><td>${(tr.usd||0).toFixed(4)}</td><td>${tr.latency_ms||""}</td>`;
@@ -315,7 +317,9 @@ async function send(text){
     if(d.escalations.length || (d.trace && d.trace.handed_over)){
       const t = d.escalations.length ? d.escalations[0].ticket : "";
       $("notice").className = "notice handed";
-      $("notice").innerHTML = `<b>A person has this conversation now${t ? ", ticket " + esc(t) : ""}.</b> Anything you write here goes onto the ticket for them. The assistant will not act on it.`;
+      $("notice").innerHTML = (d.trace && d.trace.safety_response)
+        ? `<b>A person is joining this conversation as a priority${t ? ", ticket " + esc(t) : ""}.</b> Everything you write here goes to them. If you need someone right now, the numbers are in the message above.`
+        : `<b>A person has this conversation now${t ? ", ticket " + esc(t) : ""}.</b> Anything you write here goes onto the ticket for them. The assistant will not act on it.`;
     }
   } catch(e){ thinking.remove(); add("error", String(e), "err"); }
   finally{ busy = false; $("send").disabled = false; $("text").focus(); }

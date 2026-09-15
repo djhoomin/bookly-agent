@@ -61,6 +61,8 @@ class TurnTrace:
     escalated: bool = False
     #: a person already owned the conversation: no model call was made
     handed_over: bool = False
+    #: a self-harm signal: fixed reply with resources, urgent handover, no model
+    safety_response: bool = False
     #: the fourth gate: addresses verified by code so far, refusals this turn
     #: because an account was not verified, and account reads this turn
     verified: list[str] = field(default_factory=list)

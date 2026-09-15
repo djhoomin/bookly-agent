@@ -118,8 +118,8 @@ SCENARIOS: list[Scenario] = [
             ["Hello, I'm afraid my order hasn't turned up. sam@example.com", SAM, "It's The Idiot. Could you refund it please? Thank you."],
             ["Where the hell is my book? sam@example.com", SAM, "THE IDIOT. I don't have all day. Refund it."],
             ["sam@example.com here, so the tracking says delivered but there's nothing here, "
-             "I've checked with the neighbours and everything",
-             "the idiot, dostoevsky, can i just get my money back", SAM],
+             "I've checked with the neighbours and everything", SAM,
+             "the idiot, dostoevsky, can i just get my money back"],
         ],
     ),
     Scenario(

@@ -33,6 +33,9 @@ from pathlib import Path
 TRIAGE_MODEL = "claude-haiku-4-5"
 
 ABUSE_LOG = Path(os.environ.get("BOOKLY_ABUSE_LOG", "abuse_log.jsonl"))
+#: Self-harm signals are not abuse and do not belong in the abuse log. They
+#: go to their own file, for a different team with a different response time.
+SAFETY_LOG = Path(os.environ.get("BOOKLY_SAFETY_LOG", "safety_log.jsonl"))
 
 SCHEMA = {
     "type": "object",
@@ -177,8 +180,9 @@ def log_flagged(triage: Triage, text: str, conversation_id: str) -> None:
     """
     if not triage.flagged:
         return
-    ABUSE_LOG.parent.mkdir(parents=True, exist_ok=True)
-    with ABUSE_LOG.open("a", encoding="utf-8") as fh:
+    log = SAFETY_LOG if triage.risk == "self_harm" else ABUSE_LOG
+    log.parent.mkdir(parents=True, exist_ok=True)
+    with log.open("a", encoding="utf-8") as fh:
         fh.write(json.dumps({
             "at": datetime.now(timezone.utc).isoformat(timespec="seconds"),
             "conversation": conversation_id,

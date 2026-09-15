@@ -416,6 +416,32 @@ def test_three_wrong_codes_then_no_more_attempts():
     assert not r["verified"] and "Hand over" in r["note"]
 
 
+def test_self_harm_signal_never_reaches_the_resolution_model():
+    from bookly.agent import SAFETY_REPLY
+
+    class TriageSaysSelfHarm:
+        def __init__(self): self.messages, self.resolution_calls = self, 0
+        def create(self, **kw):
+            u = types.SimpleNamespace(input_tokens=1, output_tokens=1)
+            if kw.get("output_config"):
+                block = types.SimpleNamespace(type="text", text='{"intent":"other","complexity":"simple",'
+                    '"risk":"self_harm","claim":"none","reason":""}')
+                return types.SimpleNamespace(content=[block], usage=u)
+            self.resolution_calls += 1
+            raise AssertionError("resolution model called on a self-harm signal")
+
+    client = TriageSaysSelfHarm()
+    agent = Agent(_client=client, conversation_id="safety")
+    reply = agent.say("I don't want to be here any more.")
+    assert reply == SAFETY_REPLY and "0800-0113" in reply and "112" in reply
+    assert agent.outcome.escalations[-1]["reason"] == "self_harm"
+    assert agent.outcome.escalations[-1]["priority"] == "urgent"
+    assert agent.last_trace.safety_response and client.resolution_calls == 0
+    # every later turn is the handover path: still no model, resources repeated
+    later = agent.say("sorry. about the refund though")
+    assert client.resolution_calls == 0 and "0800-0113" in later
+
+
 def test_start_return_records_the_decision():
     from bookly.tools import Outcome, dispatch
     out = Outcome()

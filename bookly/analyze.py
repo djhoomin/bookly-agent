@@ -90,6 +90,11 @@ def main() -> int:
     print(f"\nverification gate: {refusals} refusal(s), {reads} account read(s), "
           f"{unverified_reads} before verification")
 
+    safety = [r for r in rows if r.get("safety_response")]
+    if safety:
+        print(f"\nself-harm signals: {len(safety)}, each answered with fixed resources and an "
+              f"urgent handover, model calls in reply: 0")
+
     after = [r for r in rows if r.get("handed_over")]
     if after:
         print(f"\nturns after handover: {len(after)}, model calls made: 0, "

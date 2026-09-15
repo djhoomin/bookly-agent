@@ -50,6 +50,22 @@ How to work:
 Tone: brief, warm, no filler. Two or three sentences is usually enough."""
 
 
+#: Sent, unchanged, when a turn carries a self-harm signal. Written by a
+#: person, not generated: a support model has no business improvising here.
+#: The numbers are for the Netherlands, where Bookly ships from, plus the EU
+#: emergency number and an international directory. A deployment must set
+#: these for its own region and check them on a schedule.
+SAFETY_REPLY = (
+    "I'm sorry you're going through this, and I'm glad you said it. I've asked a "
+    "colleague to join this conversation as a priority, and they will reply here.\n\n"
+    "If you are in the Netherlands, 113 Zelfmoordpreventie is there day and night: "
+    "call 0800-0113 (free) or chat at 113.nl. If you are somewhere else, "
+    "findahelpline.com lists services near you. If you are in immediate danger, "
+    "call 112.\n\n"
+    "Your order can wait. You matter more than it does."
+)
+
+
 @dataclass
 class Turn:
     role: str
@@ -141,6 +157,8 @@ class Agent:
             if triage.claim != "none" and self.outcome.claim != "not_received":
                 self.outcome.claim = triage.claim
             trace.claim = self.outcome.claim
+            if triage.risk == "self_harm":
+                return self._safety_response(text, trace, started)
         gate_before = self.outcome.gate_refusals
         reads_before = self.outcome.account_reads
 
@@ -215,6 +233,29 @@ class Agent:
         return ("I am having trouble completing that. Let me put you through to a "
                 "colleague who can help.")
 
+    def _safety_response(self, text: str, trace: TurnTrace, started: float) -> str:
+        """A self-harm signal is not a support ticket, and the model does not
+        get to answer it. Fixed text with crisis resources, an urgent handover,
+        and from here the conversation belongs to a person: the after-handover
+        rule takes every later turn."""
+        import time
+
+        self.history.append(Turn("user", text))
+        dispatch("escalate_to_human",
+                 {"summary": "Customer message carries a self-harm signal. Contact as a "
+                             "priority; the customer has been given crisis resources.",
+                  "reason": "self_harm", "priority": "urgent"}, self.outcome)
+        self.history.append(Turn("assistant", [{"type": "text", "text": SAFETY_REPLY}]))
+        trace.tools = ["escalate_to_human"]
+        trace.escalated = True
+        trace.safety_response = True
+        trace.model = ""
+        trace.usd = self._usd(self.usage[len(self.usage) - 2:]) if len(self.usage) >= 2 else 0.0
+        trace.latency_ms = int((time.monotonic() - started) * 1000)
+        trace.write()
+        self.last_trace = trace
+        return SAFETY_REPLY
+
     def _after_handover(self, text: str, trace: TurnTrace, started: float) -> str:
         """Once a person owns the conversation, the agent stops.
 
@@ -242,6 +283,11 @@ class Agent:
             trace.moderated, trace.moderation = True, dict(verdict.flagged)
         reply = (f"A colleague has this conversation now, ticket {ticket}, and will reply "
                  "here. I have added your message to the ticket so they see it.")
+        if self.outcome.escalations[-1].get("reason") == "self_harm" or (
+                verdict is not None and verdict.risk == "self_harm"):
+            reply = (f"A colleague is joining as a priority, ticket {ticket}. Your message is "
+                     "with them. If you need someone right now: 0800-0113 or 113.nl in the "
+                     "Netherlands, findahelpline.com elsewhere, 112 in an emergency.")
         self.history.append(Turn("assistant", [{"type": "text", "text": reply}]))
         self.outcome.after_handover.append(text)
         trace.intent = "other"
