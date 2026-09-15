@@ -163,12 +163,13 @@ find_orders(email) -&gt; every match
 
 <section class="slide">
   <div class="eyebrow"><span>Key decision</span><span>03 / Policy is code</span></div>
-  <h2>A prompt is a suggestion. A function is a rule.</h2>
+  <h2>Don't prompt what should have been code.</h2>
   <div class="cols">
     <div class="stack">
       <p>A prompt saying <em>"only refund within 30 days"</em> is advisory, and a model being
-      helpful to an angry customer will find a reading of it that permits yes. This returns the
-      same answer whether the customer is polite or furious, and it is testable.</p>
+      helpful to an angry customer will find a reading of it that permits yes. Deterministic is almost always
+      preferable: this returns the same answer whether the customer is polite or furious, and it
+      is testable.</p>
       <pre>age = (today - order.delivered_on).days
 if age &gt; RETURN_WINDOW_DAYS:
     return Decision(

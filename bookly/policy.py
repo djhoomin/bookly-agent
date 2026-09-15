@@ -2,7 +2,8 @@
 
 This module is the argument of the whole prototype.
 
-A prompt that says "only refund within 30 days" is a suggestion. A model that
+Don't prompt what should have been code. A prompt that says "only refund
+within 30 days" is a suggestion. A model that
 is being helpful, under pressure from an unhappy customer, will find a reading
 of that sentence which lets it say yes. A function that returns
 `ineligible: outside_window` is a rule: it is inspectable, it is testable, and
