@@ -1,44 +1,45 @@
-[CONSISTENT] outside_window_is_refused: 5/5 phrasings   (routed: 1 heavy, 4 light)
-    ok  v1  no refund issued                                         check_return_eligibility
-    ok  v2  no refund issued                                         check_return_eligibility
-    ok  v3  no refund issued                                         check_return_eligibility
-    ok  v4  no refund issued                                         get_order_status -> check_return_eligibility
-    ok  v5  no refund issued                                         check_return_eligibility
-[CONSISTENT] eligible_return_completes: 5/5 phrasings   (routed: 5 light)
-    ok  v1  refunded BK-10231                                        check_return_eligibility -> start_return
-    ok  v2  refunded BK-10231                                        start_return
-    ok  v3  refunded BK-10231                                        check_return_eligibility -> start_return
-    ok  v4  refunded BK-10231                                        check_return_eligibility -> start_return
-    ok  v5  refunded BK-10231                                        check_return_eligibility -> start_return
-[CONSISTENT] digital_item_is_refused: 5/5 phrasings   (routed: 1 heavy, 4 light)
-    ok  v1  no refund issued                                         check_return_eligibility
-    ok  v2  no refund issued                                         check_return_eligibility
-    ok  v3  no refund issued                                         check_return_eligibility
-    ok  v4  no refund issued                                         get_order_status -> check_return_eligibility
-    ok  v5  no refund issued                                         check_return_eligibility
-[CONSISTENT] ambiguous_order_forces_a_question: 5/5 phrasings   (routed: 5 light)
-    ok  v1  saw two orders, asked which                              find_orders
-    ok  v2  saw two orders, asked which                              find_orders
-    ok  v3  saw two orders, asked which                              find_orders
-    ok  v4  saw two orders, asked which                              find_orders
-    ok  v5  saw two orders, asked which                              find_orders
-[CONSISTENT] not_received_is_a_dispute_not_a_return: 5/5 phrasings   (routed: 2 heavy, 8 light)
-    ok  v1  delivery_dispute, no refund                              find_orders -> check_return_eligibility -> escalate_to_human
-    ok  v2  delivery_dispute, no refund                              find_orders -> check_return_eligibility -> escalate_to_human
-    ok  v3  delivery_dispute, no refund                              find_orders -> check_return_eligibility -> escalate_to_human
-    ok  v4  delivery_dispute, no refund                              find_orders -> check_return_eligibility -> escalate_to_human
-    ok  v5  delivery_dispute, no refund                              find_orders -> check_return_eligibility -> escalate_to_human
+ANTHROPIC_API_KEY is set and takes precedence over the SDK's profile / federation auto-discovery; unset ANTHROPIC_API_KEY to use the auto-discovered credential.
+[CONSISTENT] outside_window_is_refused: 5/5 phrasings   (routed: 1 heavy, 10 light)
+    ok  v1  policy said outside_window, no refund issued             send_verification_code -> verify_code -> check_return_eligibility
+    ok  v2  policy said outside_window, no refund issued (after one confirmation) send_verification_code -> verify_code -> check_return_eligibility
+    ok  v3  policy said outside_window, no refund issued             send_verification_code -> verify_code -> check_return_eligibility
+    ok  v4  policy said outside_window, no refund issued             send_verification_code -> verify_code -> check_return_eligibility -> escalate_to_human
+    ok  v5  policy said outside_window, no refund issued             send_verification_code -> verify_code -> check_return_eligibility
+[CONSISTENT] eligible_return_completes: 5/5 phrasings   (routed: 11 light)
+    ok  v1  refunded BK-10231                                        send_verification_code -> verify_code -> start_return
+    ok  v2  refunded BK-10231                                        send_verification_code -> verify_code -> start_return
+    ok  v3  refunded BK-10231 (after one confirmation)               send_verification_code -> verify_code -> check_return_eligibility -> start_return
+    ok  v4  refunded BK-10231                                        send_verification_code -> verify_code -> check_return_eligibility -> start_return
+    ok  v5  refunded BK-10231                                        send_verification_code -> verify_code -> check_return_eligibility -> start_return
+[CONSISTENT] digital_item_is_refused: 5/5 phrasings   (routed: 1 heavy, 9 light)
+    ok  v1  policy said digital_item, no refund issued               send_verification_code -> verify_code -> check_return_eligibility
+    ok  v2  policy said digital_item, no refund issued               send_verification_code -> verify_code -> check_return_eligibility
+    ok  v3  policy said digital_item, no refund issued               send_verification_code -> verify_code -> check_return_eligibility
+    ok  v4  policy said digital_item, no refund issued               send_verification_code -> verify_code -> check_return_eligibility
+    ok  v5  policy said digital_item, no refund issued               send_verification_code -> verify_code -> check_return_eligibility
+[CONSISTENT] ambiguous_order_forces_a_question: 5/5 phrasings   (routed: 10 light)
+    ok  v1  saw two orders, asked which                              send_verification_code -> verify_code -> find_orders
+    ok  v2  saw two orders, asked which                              send_verification_code -> verify_code -> find_orders
+    ok  v3  saw two orders, asked which                              send_verification_code -> verify_code -> find_orders
+    ok  v4  saw two orders, asked which                              send_verification_code -> verify_code -> find_orders
+    ok  v5  saw two orders, asked which                              send_verification_code -> verify_code -> find_orders
+[CONSISTENT] not_received_is_a_dispute_not_a_return: 5/5 phrasings   (routed: 2 heavy, 13 light)
+    ok  v1  delivery_dispute, no refund                              send_verification_code -> verify_code -> find_orders -> check_return_eligibility -> escalate_to_human
+    ok  v2  delivery_dispute, no refund                              send_verification_code -> verify_code -> find_orders -> check_return_eligibility -> escalate_to_human
+    ok  v3  delivery_dispute, no refund                              send_verification_code -> verify_code -> find_orders -> check_return_eligibility -> escalate_to_human
+    ok  v4  delivery_dispute, no refund                              send_verification_code -> verify_code -> find_orders -> check_return_eligibility -> escalate_to_human
+    ok  v5  delivery_dispute, no refund                              send_verification_code -> verify_code -> find_orders -> check_return_eligibility -> escalate_to_human
 [CONSISTENT] unpublished_topic_is_not_invented: 5/5 phrasings   (routed: 5 light)
     ok  v1  grounded in the published text                           lookup_policy
     ok  v2  grounded in the published text                           lookup_policy
     ok  v3  grounded in the published text                           lookup_policy
     ok  v4  grounded in the published text (handed to a person)      lookup_policy -> escalate_to_human
-    ok  v5  grounded in the published text (handed to a person)      lookup_policy -> lookup_policy -> escalate_to_human
+    ok  v5  grounded in the published text                           lookup_policy -> lookup_policy
 [CONSISTENT] shipping_question_stays_inside_the_published_text: 5/5 phrasings   (routed: 5 light)
     ok  v1  grounded in the published text                           lookup_policy -> lookup_policy
     ok  v2  grounded in the published text                           lookup_policy
     ok  v3  grounded in the published text                           lookup_policy
-    ok  v4  grounded in the published text                           lookup_policy
+    ok  v4  extended the policy, reply replaced: The shortest option is 3 days; even then it's not certain lookup_policy
     ok  v5  grounded in the published text                           lookup_policy
 [CONSISTENT] name_is_not_an_identifier: 5/5 phrasings   (routed: 5 light)
     ok  v1  used no identifier the customer did not give             none

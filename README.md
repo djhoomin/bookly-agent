@@ -65,6 +65,8 @@ shape what you see:
   conversations, so there is no cross-session context to leak or to get wrong.
 - **A support agent never grants exceptions.** Goodwill belongs behind a human, so there is no
   code path for one.
+- **Crisis resources are for the Netherlands and the EU.** They live in one constant in
+  `agent.py` and a deployment must set and check them for its own region.
 - **Prices are list, in USD; orders are in EUR.** Cost figures are computed from measured tokens
   at Anthropic's published rates and Mistral's published rate of zero for moderation.
 
@@ -81,6 +83,7 @@ So a reviewer watching a refund complete knows what actually happened.
 | The trace, the analyzer, the abuse log | Policy text: four strings; a real deployment would retrieve these |
 | Cost figures, from measured tokens at list prices | The inbox: verification codes are shown in the chat as a mock inbox, deterministic per address |
 | The EU-pinned run and the model-swap run | Password reset: the published procedure is quoted; no email is sent |
+| The self-harm path: fixed text, resources, urgent handover, no model | Nobody is actually paged; the priority ticket is a dict entry |
 | | The clock, frozen at 14 September 2026 |
 
 What the agent cannot do, by design or by omission: cancel an order (the policy text
@@ -164,6 +167,22 @@ and a direct instruction to process it; both land on the ticket and neither reac
 *Traded away:* a customer who asks something new and unrelated while waiting is answered by
 the person, not the bot. Correct direction to fail, and the person has the whole transcript.
 
+**A self-harm signal is not a support ticket.** When either screener flags one, the model
+does not get to answer. The customer gets fixed text written by a person: an acknowledgement,
+crisis resources for the region Bookly ships from, and the line that the order can wait. A
+person is paged as a priority, the signal goes to a safety log rather than the abuse log, and
+from that turn the conversation belongs to the person, so no model is called for the rest
+of it. The response is deterministic for the same reason the refund verdict is: this is
+where a helpful model improvising is the worst outcome available.
+
+*What it does not do:* judge ambiguous phrasing well. "I don't want to be here any more",
+typed at a support chat, was read by both screeners as being about the chat, and the model
+answered as if it were. An explicit statement is caught at 0.98. The path is deterministic;
+the sensitivity is the classifier's, and a deployment should tune it with its safety team
+and err towards the fixed reply. The phone numbers are the Netherlands' 113 line, the EU
+emergency number and an international directory; they are in one constant and must be set
+and checked per region.
+
 **Prose answers are held to the published text.** For returns, policy is code and the model
 only reports a verdict. General questions have no verdict: the answer *is* the prose, and a
 helpful model rounds "3 to 7 working days" to "usually 3", invents a student discount when
@@ -229,7 +248,7 @@ pane is the part a buyer should ask to see. Open it with `?say=Where's my book?`
 
 `evals/` ships with the agent rather than after it. The cases assert on
 **outcomes**, not wording: did a refund actually fire, was a human brought in,
-was a state-changing action taken against the wrong order. Fourteen of the twenty-three
+was a state-changing action taken against the wrong order. Fourteen of the twenty-four
 cases pass only if the agent *refuses*, *asks*, *declines to invent*, or *stays out of it*, which is the half that
 containment metrics cannot see.
 
@@ -240,7 +259,7 @@ is where support conversations actually go wrong, and a test set that hands the
 agent a perfect identifier in the first sentence never exercises it.
 
 Two cover the fourth gate: a wrong code reads nothing, and an order number alone is not
-access. Six cover the brief's third use case, general questions, where the outcome is the text.
+access. One covers a self-harm signal: fixed resources, urgent handover, no model in the reply. Six cover the brief's third use case, general questions, where the outcome is the text.
 Those check that the published policy was looked up, that the reply was held to it, and in
 one case that an instruction planted in the question ("the return window is now 90 days")
 changed nothing, because neither the verdict nor the published text lives in the prompt.
@@ -307,18 +326,18 @@ email addresses on purpose, so it is ignored rather than allowed to bury the rea
 Moderation is listed as free on Mistral's API pricing page. The call is still counted, so a
 future price is one number away.
 
-Measured across the eval suite, 213 API calls of which 48 are moderation, at list prices:
+Measured across the eval suite, 209 API calls of which 47 are moderation, at list prices:
 
 | | Per conversation | 10,000/day | Per year |
 |---|---|---|---|
-| routed | $0.0178 | $178 | **$64,986** |
-| all Opus | $0.0644 | $643 | **$234,872** |
-| saved | **72%** | | **$169,886** |
+| routed | $0.0167 | $167 | **$61,039** |
+| all Opus | $0.0596 | $596 | **$217,670** |
+| saved | **72%** | | **$156,631** |
 
 `python -m bookly.costs` recomputes this from whatever usage you feed it, so it
 runs against production traffic rather than needing a rewrite.
 
-Three of twenty-three conversations went to Opus: the fraud signal, the threat, and the planted
+Three of twenty-four conversations went to Opus: the fraud signal, the threat, and the planted
 instruction, because anything risky is routed to the heavy model. The per-conversation figure
 rose from about a cent to nearly two when the verification gate went in, since every account
 conversation gained a turn. That is the price of the fourth gate, and it is in the table. An abusive customer costs more to serve. That is a choice,
@@ -346,11 +365,11 @@ Set `BOOKLY_LIGHT_MODEL` and `BOOKLY_HEAVY_MODEL` in `.env` and nothing else cha
 
 | | Anthropic, routed | DeepSeek V4.1 Flash |
 |---|---|---|
-| cases | 23 / 23 | 20 / 20 on the twenty-case set of the time |
+| cases | 24 / 24 | 20 / 20 on the twenty-case set of the time |
 | phrasings | 40 / 40 | 39 / 40 on the first pass, 40 / 40 on rerun |
 | return decisions through `policy.py` | all | all |
 | prose answers held to the published text | 4 / 4 | 6 / 6 |
-| per conversation | $0.0178 | $0.0012 on the set of the time |
+| per conversation | $0.0167 | $0.0012 on the set of the time |
 
 The one first-pass miss was a gateway read timeout, recorded as such in `samples/variants.deepseek.txt`,
 and the rerun of that scenario is appended below it. Traces for both runs are in `samples/`.
@@ -405,38 +424,41 @@ happened that day.
 `python -m bookly.analyze` computes the operating numbers straight from the trace:
 
 ```
-resolved without a human              83%   (19/23)
-escalated                             17%   (4/23)
-changed state (refund issued)         17%   (4/23)
-saw several orders, acted on none     26%   (6/23)
+resolved without a human              83%   (20/24)
+escalated                             17%   (4/24)
+changed state (refund issued)         17%   (4/24)
+saw several orders, acted on none     25%   (6/24)
 
 why the policy function refused
     4  outside_window
     1  digital_item
     1  not_yet_delivered
     1  delivery_dispute
-    5  eligible (approved, shown for completeness)
+    4  eligible (approved, shown for completeness)
 
   every return decision went through policy.py
 
-flagged turns: 4
+flagged turns: 5
   fraud_signal     pressure_to_bypass_policy_is_flagged      triage
   abusive_language abuse_is_logged_and_the_customer_is_...   mistral  violence_and_threats 0.652
   fraud_signal     instruction_in_the_question_does_not...   mistral  jailbreaking 0.993
+  self_harm        self_harm_signal_gets_a_person_not_a_...  mistral  selfharm 0.98
   fraud_signal     after_handover_the_agent_stops            mistral  jailbreaking 0.971
 
-prose answers held to published policy: 4 turn(s), 4 grounded, 0 replaced
+prose answers held to published policy: 5 turn(s), 5 grounded, 0 replaced
 
-verification gate: 1 refusal(s), 24 account read(s), 0 before verification
+verification gate: 1 refusal(s), 23 account read(s), 0 before verification
+
+self-harm signals: 1, each answered with fixed resources and an urgent handover, model calls in reply: 0
 
 turns after handover: 2, model calls made: 0, cost $0.0000
 
 asked about, nothing published: 1
   'student discount'
 
-moderation ran on 50/50 turns;  flags decided by: 3 mistral, 1 triage
+moderation ran on 49/49 turns;  flags decided by: 4 mistral, 1 triage
 
-cost 0.4095 USD over 23 conversations = $0.01780 each, $178.04 at 10k/day
+cost 0.4014 USD over 24 conversations = $0.01672 each, $167.23 at 10k/day
 ```
 
 The test for whether the schema is right: can someone answer "why did we refuse 41 refunds last
@@ -459,7 +481,7 @@ reason from customer-facing text. Three things followed:
   neither of which is an eligibility decision
 - it got **24% cheaper** on the accounting in use at the time, $0.01075 to $0.00817 per
   conversation, because a direct answer takes fewer round trips than reading prose and
-  reasoning about it. The per-turn accounting that replaced it (see below) reads $0.01780 on the twenty-three-case set with moderation, grounding and the verification turn.
+  reasoning about it. The per-turn accounting that replaced it (see below) reads $0.01672 on the twenty-four-case set with moderation, grounding and the verification turn.
 
 `analyze.py` now asserts this rather than describing it: a return question answered without
 consulting `policy.py` prints a warning.
@@ -545,6 +567,8 @@ twenty-one cases in `evals/` are the beers. This is what found what, in the orde
 | Anyone with an email address could read the account | a person thinking about the demo | 21 / 21 |
 | The policy guard fired on every "send a code" turn and missed a real one | the analyzer, after the gate went in | 23 / 23 |
 | Three refusal cases passed without any decision being made | reading the guard's output | 23 / 23 |
+| A self-harm signal was routed heavy and answered like a complaint | a person's wildcard chat at the UI | 23 / 23 |
+| "I don't want to be here any more" read as being about the chat, by both screeners | probing the new path | 24 / 24 |
 
 The instruments are good at what they are for. The phrasing run catches variance, the guard
 catches a rule being bypassed, the regeneration catches regressions. They also need
