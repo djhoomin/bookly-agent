@@ -23,13 +23,14 @@ Live runs write `trace.jsonl`, `abuse_log.jsonl` and `measured.json` in the work
 directory and those are gitignored. The committed reference run is in `samples/`, and
 `analyze` and `costs` read it when no local run exists.
 
-## Three things to try
+## Four things to try
 
 | Say this | What happens |
 |---|---|
+| `Where's my book?` | Nothing to look up. The agent asks who you are. Give it `sam@example.com` and three orders come back, so it asks which. |
 | `I'd like to return my copy of Dune. ria@example.com` | Two Dunes on the account, one ebook and one paperback. The agent has nothing to act on and asks. |
 | `Refund BK-09988, I didn't enjoy it. sam@example.com` | Delivered 55 days ago. Policy refuses, the agent reports it and offers a person. |
-| `I'd like to return BK-10231, it arrived damaged. sam@example.com` | Inside the window. The return completes. |
+| `bk10231 arrived damaged, I want to send it back. sam@example.com` | Inside the window, typo and all. The return completes. |
 
 ## How it is put together
 
@@ -72,13 +73,28 @@ path produces something that always does.
 is a coin flip between refunding a returnable paperback and a non-returnable
 ebook, and the wrong call is visible to the customer.
 
+**An email address is identification, not authentication.** The agent uses it to
+find the right account, and nothing here checks that the person typing it owns
+it. Anyone who knows sam@example.com can return Sam's books. That is the largest
+gap between this prototype and a deployment, and it is not one a prompt closes:
+it needs a verified session, or a one-time code sent to the address on file
+before any state changes. Named here rather than in a footnote because a
+reviewer's first question about a refund agent should be "what stops me
+refunding yours".
+
 ## Evaluation
 
 `evals/` ships with the agent rather than after it. The cases assert on
 **outcomes**, not wording: did a refund actually fire, was a human brought in,
-was a state-changing action taken against the wrong order. Five of the seven cases
-pass only if the agent *refuses* to do something, which is the half that
+was a state-changing action taken against the wrong order. Seven of the twelve
+cases pass only if the agent *refuses* or *asks*, which is the half that
 containment metrics cannot see.
+
+Five of the cases start the way a real conversation starts, with no order ID and
+no email: "Where's my book?", a first name and a title, a typo'd ID, the paperback
+one of two Dunes, and a book that belongs to a different customer. Identification
+is where support conversations actually go wrong, and a test set that hands the
+agent a perfect identifier in the first sentence never exercises it.
 
 ## Model routing and abuse screening
 
@@ -86,13 +102,13 @@ Every inbound turn is screened first by Claude Haiku 4.5. One call, two jobs: it
 model for that turn, and it flags abusive language or fraud signals. Both want the same cheap
 read of the same text, so splitting them would pay twice.
 
-Measured across the eval suite, 24 API calls, at list prices:
+Measured across the eval suite, 44 API calls, at list prices:
 
 | | Per conversation | 10,000/day | Per year |
 |---|---|---|---|
-| routed | $0.0075 | $75 | **$27,376** |
-| all Opus | $0.0212 | $212 | **$77,312** |
-| saved | **65%** | | **$49,936** |
+| routed | $0.0073 | $73 | **$26,513** |
+| all Opus | $0.0238 | $238 | **$87,016** |
+| saved | **70%** | | **$60,503** |
 
 `python -m bookly.costs` recomputes this from whatever usage you feed it, so it
 runs against production traffic rather than needing a rewrite.
@@ -144,22 +160,23 @@ happened that day.
 `python -m bookly.analyze` computes the operating numbers straight from the trace:
 
 ```
-resolved without a human              86%   (6/7)
-escalated                             14%   (1/7)
-changed state (refund issued)         14%   (1/7)
-asked which order before acting       14%   (1/7)
+resolved without a human              92%   (11/12)
+escalated                              8%   (1/12)
+changed state (refund issued)         25%   (3/12)
+saw several orders, acted on none     25%   (3/12)
 
 why the policy function refused
     3  outside_window
     1  digital_item
     1  not_yet_delivered
+    3  eligible (approved, shown for completeness)
 
   every return decision went through policy.py
 
 flagged turns: 1
   fraud_signal     pressure_to_bypass_policy_is_flagged
 
-cost 0.0525 USD over 7 conversations = $0.00750 each, $75.00 at 10k/day
+cost 0.0872 USD over 12 conversations = $0.00726 each, $72.64 at 10k/day
 ```
 
 The test for whether the schema is right: can someone answer "why did we refuse 41 refunds last
@@ -182,7 +199,7 @@ reason from customer-facing text. Three things followed:
   neither of which is an eligibility decision
 - it got **24% cheaper** on the accounting in use at the time, $0.01075 to $0.00817 per
   conversation, because a direct answer takes fewer round trips than reading prose and
-  reasoning about it. The per-turn accounting that replaced it (see below) reads $0.00750.
+  reasoning about it. The per-turn accounting that replaced it (see below) reads $0.00726.
 
 `analyze.py` now asserts this rather than describing it: a return question answered without
 consulting `policy.py` prints a warning.
@@ -205,7 +222,8 @@ keep, and each is fixed in the history.
   four were refusals ending in "shall I put you through to someone?". The headline was
   inflated fivefold, and the analyzer used the same flag to silence its own policy warning.
   The flag is now derived from the tool result: `find_orders` returned more than one match
-  and nothing acted. It reads 14%, which is the truth.
+  and no state changed. It is labelled for exactly that, and it reads a quarter of
+  conversations rather than most of them.
 - **Cost was cumulative, not per turn.** Turn two of a conversation carried turn one's tokens
   and dollars, so multi-turn conversations were double counted and the analyzer disagreed with
   the cost model. They now print the same total.
@@ -220,6 +238,11 @@ keep, and each is fixed in the history.
   `escalate_to_human` like any other handover.
 - A stray CJK character in a docstring, an unused import, no requirements file, and runtime
   logs committed at the repo root.
+- **Every test customer spoke like a fixture.** Seven cases, and each opened with an order ID
+  or an email in the first sentence. The identification step, which is where real support
+  conversations go wrong, was never exercised, and the demo never showed it. Five cases now
+  start with nothing, a name, a typo, a qualifier, or someone else's book, and the backend
+  normalises the IDs customers actually type.
 
 None of this was visible from the README, and the README was the best-written part of the
 repo. That is the point. A coding agent produces prose about the code faster than it produces
@@ -246,4 +269,5 @@ claimed account authority, repeated refund attempts on one order, pressure to ch
 details. Those cases have to come from real traffic, which is why the transcripts matter more.
 
 Everything else is ordinary engineering: retrieval instead of a dict for policy text,
-authentication before any state change, and a goodwill path behind a human.
+the verified identity described above before any state change, and a goodwill path behind
+a human.
