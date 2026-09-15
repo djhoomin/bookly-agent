@@ -12,6 +12,8 @@ Two shapes differ and both are handled here:
             OpenAI    {type: function, function: {name, description, parameters}}
   results   Anthropic a user message of tool_result blocks
             OpenAI    one message per result, role "tool", keyed by tool_call_id
+  schema    Anthropic output_config.format json_schema
+            OpenAI    response_format json_schema
 """
 
 from __future__ import annotations
@@ -91,12 +93,21 @@ class _Messages:
 
     def create(self, *, model: str, max_tokens: int, system: str = "",
                messages: list[dict], tools: list[dict] | None = None,
-               **_ignored) -> _Response:
+               output_config: dict | None = None, **_ignored) -> _Response:
+        extra: dict[str, Any] = {}
+        fmt = (output_config or {}).get("format") or {}
+        if fmt.get("type") == "json_schema":
+            extra["response_format"] = {
+                "type": "json_schema",
+                "json_schema": {"name": "response", "strict": True,
+                                "schema": fmt["schema"]},
+            }
         completion = self._client.chat.completions.create(
             model=model,
             max_tokens=max_tokens,
             messages=_to_openai_messages(system, messages),
             tools=_to_openai_tools(tools) if tools else None,
+            **extra,
         )
         choice = completion.choices[0].message
         blocks: list[Any] = []

@@ -15,9 +15,9 @@ the same text, so doing them separately would be paying twice for one read.
 
 Rehearsal Studio, a product I am building with a language-training partner, uses
 Mistral's moderation endpoint for exactly this shape of job. Here the classifier
-is Haiku so the prototype stays on one provider, but the architecture is the
-same: a small model in front, deciding what the large one is allowed to be
-bothered with.
+is Haiku so the prototype stays on one vendor, and the architecture is the same:
+a small model in front, deciding what the large one is allowed to be bothered
+with.
 """
 
 from __future__ import annotations
@@ -28,9 +28,10 @@ from dataclasses import asdict, dataclass
 from datetime import datetime, timezone
 from pathlib import Path
 
+#: Default when no provider is supplied. Through the agent, the classifier runs
+#: on the provider's light model so the ID is right for whichever gateway is
+#: active; see providers.MODEL_MAP.
 TRIAGE_MODEL = "claude-haiku-4-5"
-HEAVY_MODEL = "claude-opus-5"
-LIGHT_MODEL = "claude-haiku-4-5"
 
 ABUSE_LOG = Path(os.environ.get("BOOKLY_ABUSE_LOG", "abuse_log.jsonl"))
 
@@ -75,31 +76,47 @@ class Triage:
     reason: str
 
     @property
-    def model(self) -> str:
+    def tier(self) -> str:
         """Complex turns and anything risky go to the expensive model."""
         if self.complexity == "complex" or self.risk != "none":
-            return HEAVY_MODEL
-        return LIGHT_MODEL
+            return "heavy"
+        return "light"
 
     @property
     def flagged(self) -> bool:
         return self.risk != "none"
 
 
-def classify(client, text: str, return_usage: bool = False):
+def _parse(raw: str) -> Triage:
+    """Structured output makes this a formality on the Anthropic API. A gateway
+    that ignores the schema may wrap the JSON in a code fence or add prose, so
+    tolerate that, and if it still does not parse, fail towards the expensive
+    model rather than towards a cheap guess."""
+    text = raw.strip()
+    if text.startswith("```"):
+        text = text.strip("`").split("\n", 1)[-1].rsplit("```", 1)[0]
+    start, end = text.find("{"), text.rfind("}")
+    try:
+        payload = json.loads(text[start:end + 1])
+        return Triage(intent=payload["intent"], complexity=payload["complexity"],
+                      risk=payload["risk"], reason=payload.get("reason", ""))
+    except (ValueError, KeyError, TypeError):
+        return Triage("other", "complex", "none",
+                      f"classifier output did not parse: {raw[:80]!r}")
+
+
+def classify(client, text: str, model: str = TRIAGE_MODEL,
+             return_usage: bool = False):
     response = client.messages.create(
-        model=TRIAGE_MODEL,
+        model=model,
         max_tokens=256,
         system=INSTRUCTIONS,
         output_config={"format": {"type": "json_schema", "schema": SCHEMA}},
         messages=[{"role": "user", "content": text}],
     )
-    payload = json.loads(
-        next(b.text for b in response.content if b.type == "text")
-    )
-    triage = Triage(**payload)
+    triage = _parse("".join(b.text for b in response.content if b.type == "text"))
     if return_usage:
-        return triage, (TRIAGE_MODEL, response.usage.input_tokens,
+        return triage, (model, response.usage.input_tokens,
                         response.usage.output_tokens)
     return triage
 

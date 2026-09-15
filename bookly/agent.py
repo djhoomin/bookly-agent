@@ -12,16 +12,13 @@ string, that is the signal that a rule has leaked out of policy.py.
 from __future__ import annotations
 
 import json
-import os
 from dataclasses import dataclass, field
 from typing import Any, Callable
 
 from .providers import active, build_client
 from .tools import TOOLS, Outcome, dispatch
 from .trace import TurnTrace
-from .triage import HEAVY_MODEL, classify, log_flagged
-
-MODEL = HEAVY_MODEL
+from .triage import classify, log_flagged
 
 SYSTEM = """You are Bookly's customer support agent. Bookly is an online bookstore.
 
@@ -50,7 +47,9 @@ class Turn:
 class Agent:
     """One conversation. Holds its own history, so memory is explicit."""
 
-    model: str = MODEL
+    #: Override the resolution model. Empty means the provider's heavy model,
+    #: or whichever tier triage picks when routing is on.
+    model: str = ""
     max_tool_rounds: int = 6
     #: Screen each turn with a small model and route accordingly. Off gives
     #: every turn to the expensive model, which is what the cost model compares
@@ -98,17 +97,21 @@ class Agent:
                           residency=self.provider.residency)
         before_refunds = len(self.outcome.refunds)
         before_escalations = len(self.outcome.escalations)
+        before_ambiguities = len(self.outcome.ambiguities)
         before_calls = len(self.outcome.calls)
+        usage_start = len(self.usage)
 
-        model = self.model
+        model = self.model or self.provider.model("heavy")
         if self.route:
-            triage, tri_usage = classify(self.client, text, return_usage=True)
+            triage, tri_usage = classify(self.client, text,
+                                         model=self.provider.model("light"),
+                                         return_usage=True)
             self.triages.append(triage)
             self.usage.append(("triage",) + tri_usage)
             log_flagged(triage, text, self.conversation_id)
             if self.on_triage:
                 self.on_triage(triage)
-            model = triage.model
+            model = self.model or self.provider.model(triage.tier)
             trace.intent, trace.complexity = triage.intent, triage.complexity
             trace.risk = triage.risk
 
@@ -130,16 +133,17 @@ class Agent:
             if not tool_uses:
                 reply = "".join(b.text for b in response.content
                                 if b.type == "text").strip()
+                this_turn = self.usage[usage_start:]
                 trace.model = model
-                trace.tokens_in = sum(i for r, _m, i, _o in self.usage
-                                      if r == "resolve")
-                trace.tokens_out = sum(o for r, _m, _i, o in self.usage
-                                       if r == "resolve")
-                trace.usd = self._usd()
+                trace.tokens_in = sum(i for _r, _m, i, _o in this_turn)
+                trace.tokens_out = sum(o for _r, _m, _i, o in this_turn)
+                trace.usd = self._usd(this_turn)
                 trace.tools = self.outcome.calls[before_calls:]
                 trace.state_changed = len(self.outcome.refunds) > before_refunds
                 trace.escalated = len(self.outcome.escalations) > before_escalations
-                trace.asked_clarifying = reply.rstrip().endswith("?")
+                trace.asked_which_order = (
+                    len(self.outcome.ambiguities) > before_ambiguities
+                    and not trace.state_changed)
                 trace.latency_ms = int((time.monotonic() - started) * 1000)
                 trace.write()
                 return reply
@@ -159,20 +163,27 @@ class Agent:
                 })
             self.history.append(Turn("user", results))
 
+        # Out of rounds. Hand over for real, so the ticket the customer is
+        # promised actually exists, rather than only saying the words.
+        dispatch("escalate_to_human",
+                 {"summary": "Agent exhausted its tool budget without resolving the turn.",
+                  "reason": "tool_rounds_exhausted"}, self.outcome)
         trace.model = model
         trace.escalated = True
+        trace.tools = self.outcome.calls[before_calls:]
+        trace.usd = self._usd(self.usage[usage_start:])
+        trace.latency_ms = int((time.monotonic() - started) * 1000)
         trace.write()
         return ("I am having trouble completing that. Let me put you through to a "
                 "colleague who can help.")
 
-    def _usd(self) -> float:
+    def _usd(self, rows) -> float:
         from .costs import cost
 
         total = 0.0
-        for _role, model, tin, tout in self.usage:
-            bare = model.split("/")[-1]
+        for _role, model, tin, tout in rows:
             try:
-                total += cost(bare, tin, tout)
+                total += cost(model, tin, tout)
             except KeyError:
                 pass
         return round(total, 6)
