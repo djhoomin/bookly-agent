@@ -29,7 +29,7 @@ def main() -> int:
 
     escalated = sum(1 for turns in convs.values() if any(t["escalated"] for t in turns))
     changed = sum(1 for turns in convs.values() if any(t["state_changed"] for t in turns))
-    asked = sum(1 for turns in convs.values() if any(t["asked_which_order"] for t in turns))
+    asked = sum(1 for turns in convs.values() if any(t["held_on_ambiguity"] for t in turns))
     flagged = [r for r in rows if r["risk"] != "none"]
     usd = sum(r["usd"] for r in rows)
 
@@ -38,9 +38,11 @@ def main() -> int:
           f"({n-escalated}/{n})")
     print(f"{'escalated':<34}{escalated/n:>7.0%}   ({escalated}/{n})")
     print(f"{'changed state (refund issued)':<34}{changed/n:>7.0%}   ({changed}/{n})")
-    print(f"{'asked which order before acting':<34}{asked/n:>7.0%}   ({asked}/{n})")
+    print(f"{'saw several orders, acted on none':<34}{asked/n:>7.0%}   ({asked}/{n})")
 
-    codes = collections.Counter(c for r in rows for c in r["policy_codes"])
+    # One decision per turn: the read-only check and the return both record the
+    # same code for the same order, and that is one eligibility decision.
+    codes = collections.Counter(c for r in rows for c in set(r["policy_codes"]))
     refusals = {c: n for c, n in codes.items() if c != "eligible"}
     if refusals:
         print("\nwhy the policy function refused")
@@ -55,7 +57,7 @@ def main() -> int:
     # which order, or handing over to a person, are not eligibility decisions.
     unchecked = [r for r in rows
                  if r["intent"] == "return_refund" and not r["policy_codes"]
-                 and not r["asked_which_order"] and not r["escalated"]]
+                 and not r["held_on_ambiguity"] and not r["escalated"]]
     if unchecked:
         print(f"\n  WARNING: {len(unchecked)} return question(s) answered without "
               f"consulting policy.py:")

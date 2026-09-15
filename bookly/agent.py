@@ -141,7 +141,7 @@ class Agent:
                 trace.tools = self.outcome.calls[before_calls:]
                 trace.state_changed = len(self.outcome.refunds) > before_refunds
                 trace.escalated = len(self.outcome.escalations) > before_escalations
-                trace.asked_which_order = (
+                trace.held_on_ambiguity = (
                     len(self.outcome.ambiguities) > before_ambiguities
                     and not trace.state_changed)
                 trace.latency_ms = int((time.monotonic() - started) * 1000)
