@@ -16,7 +16,9 @@ import os
 from dataclasses import dataclass, field
 from typing import Any, Callable
 
+from .providers import active, build_client
 from .tools import TOOLS, Outcome, dispatch
+from .trace import TurnTrace
 from .triage import HEAVY_MODEL, classify, log_flagged
 
 MODEL = HEAVY_MODEL
@@ -55,6 +57,9 @@ class Agent:
     #: against.
     route: bool = True
     conversation_id: str = "local"
+    #: Which gateway and jurisdiction. See providers.py; set with BOOKLY_PROVIDER.
+    provider: Any = field(default_factory=active)
+    turn_no: int = 0
     history: list[Turn] = field(default_factory=list)
     outcome: Outcome = field(default_factory=Outcome)
     triages: list[Any] = field(default_factory=list)
@@ -69,9 +74,7 @@ class Agent:
     @property
     def client(self):
         if self._client is None:
-            import anthropic
-
-            self._client = anthropic.Anthropic()
+            self._client = build_client(self.provider)
         return self._client
 
     def _messages(self) -> list[dict[str, Any]]:
@@ -86,6 +89,17 @@ class Agent:
         and both are model-independent. A triage miss costs a less polished
         reply, never a wrong refund.
         """
+        import time
+
+        started = time.monotonic()
+        self.turn_no += 1
+        trace = TurnTrace(conversation=self.conversation_id, turn=self.turn_no,
+                          provider=self.provider.name,
+                          residency=self.provider.residency)
+        before_refunds = len(self.outcome.refunds)
+        before_escalations = len(self.outcome.escalations)
+        before_calls = len(self.outcome.calls)
+
         model = self.model
         if self.route:
             triage, tri_usage = classify(self.client, text, return_usage=True)
@@ -95,6 +109,8 @@ class Agent:
             if self.on_triage:
                 self.on_triage(triage)
             model = triage.model
+            trace.intent, trace.complexity = triage.intent, triage.complexity
+            trace.risk = triage.risk
 
         self.history.append(Turn("user", text))
 
@@ -112,12 +128,28 @@ class Agent:
 
             tool_uses = [b for b in response.content if b.type == "tool_use"]
             if not tool_uses:
-                return "".join(b.text for b in response.content if b.type == "text").strip()
+                reply = "".join(b.text for b in response.content
+                                if b.type == "text").strip()
+                trace.model = model
+                trace.tokens_in = sum(i for r, _m, i, _o in self.usage
+                                      if r == "resolve")
+                trace.tokens_out = sum(o for r, _m, _i, o in self.usage
+                                       if r == "resolve")
+                trace.usd = self._usd()
+                trace.tools = self.outcome.calls[before_calls:]
+                trace.state_changed = len(self.outcome.refunds) > before_refunds
+                trace.escalated = len(self.outcome.escalations) > before_escalations
+                trace.asked_clarifying = reply.rstrip().endswith("?")
+                trace.latency_ms = int((time.monotonic() - started) * 1000)
+                trace.write()
+                return reply
 
             results = []
             for block in tool_uses:
                 args = dict(block.input or {})
                 result = dispatch(block.name, args, self.outcome)
+                if isinstance(result, dict) and result.get("code"):
+                    trace.policy_codes.append(result["code"])
                 if self.on_tool:
                     self.on_tool(block.name, args, result)
                 results.append({
@@ -127,5 +159,20 @@ class Agent:
                 })
             self.history.append(Turn("user", results))
 
+        trace.model = model
+        trace.escalated = True
+        trace.write()
         return ("I am having trouble completing that. Let me put you through to a "
                 "colleague who can help.")
+
+    def _usd(self) -> float:
+        from .costs import cost
+
+        total = 0.0
+        for _role, model, tin, tout in self.usage:
+            bare = model.split("/")[-1]
+            try:
+                total += cost(bare, tin, tout)
+            except KeyError:
+                pass
+        return round(total, 6)

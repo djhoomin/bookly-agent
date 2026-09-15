@@ -104,9 +104,66 @@ trusting it.
 partner uses Mistral's moderation endpoint for this job. Different classifier, same
 architecture: a small model in front deciding what the large one is allowed to be bothered with.
 
+## Where the data is processed
+
+`providers.py` makes the gateway and the jurisdiction configuration rather than a constant.
+
+| `BOOKLY_PROVIDER` | Endpoint | Residency |
+|---|---|---|
+| `anthropic` *(default)* | Anthropic API | Anthropic's default regions |
+| `openrouter` | `openrouter.ai/api/v1` | Unpinned |
+| `openrouter-eu` | `eu.openrouter.ai/api/v1` | EU only. OpenRouter states prompts and completions "are processed within the selected region and do not leave it". Enterprise plan, enabled by request. |
+
+For a European enterprise buyer this is a procurement gate, not a preference. A support agent
+handles names, order history and complaints, so it is GDPR-bound by default. An architecture
+that cannot answer the residency question does not reach a pilot at a bank, an insurer or a
+public body however good the agent is. Here the answer is an environment variable.
+
+`openai_bridge.py` is the adapter, and it is deliberately thin: it translates tool definitions
+and tool results, and nothing else. A fatter adapter would be the all-in-one abstraction this
+exercise asks us to avoid.
+
+## Observability
+
+`trace.jsonl` records one row per turn, and it records **decisions** rather than events: the
+triage verdict, the policy code, the tools reached for, whether state changed, tokens and cost.
+
+Generic APM cannot help here, because the interesting things are not exceptions. A refund
+correctly refused is a 200 and a cheerful log line, and it is also the most important thing that
+happened that day.
+
+`python -m bookly.analyze` computes the operating numbers straight from the trace:
+
+```
+resolved without a human              86%   (6/7)
+escalated                             14%   (1/7)
+asked before acting                   57%   (4/7)
+
+why the policy function refused
+    3  outside_window
+
+flagged turns: 1
+  fraud_signal     pressure_to_bypass_policy_is_flagged
+
+cost 0.0752 USD over 7 conversations = $0.01075 each
+```
+
+The test for whether the schema is right: can someone answer "why did we refuse 41 refunds last
+week" without opening a transcript.
+
 ## What I would change first
 
-**Stop testing only the failures I thought of.** Two sources replace them, and they test
+**The trace found a hole in the architecture it was built to observe.** Four of eight turns
+resolved *without calling the policy function*: the agent read the order status and the published
+policy text and concluded for itself. The gate stops wrong approvals, because nothing refunds
+without `start_return`. It does not force **refusals** through policy, so the model can decline
+on its own reading and no code is recorded. That weakens the central claim of this design in a
+specific, fixable way, and it is the first thing I would change: route every refund decision
+through `policy.py`, including the negative ones.
+
+Second:
+
+**Then stop testing only the failures I thought of.** Two sources replace them, and they test
 different layers.
 
 **Real transcripts** give the agent's cases. What goes wrong in the first week of a deployment
