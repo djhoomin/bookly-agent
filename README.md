@@ -31,11 +31,13 @@ cp .env.example .env                  # then fill in the keys, or: ant auth logi
 .venv/bin/python -m tests.test_offline   # wiring checks, no key needed
 ```
 
-Live runs write `trace.jsonl`, `abuse_log.jsonl` and `measured.json` in the working
-directory and those are gitignored. The committed reference run is in `samples/`, and
-`analyze` and `costs` read it when no local run exists.
+Live runs write `trace.jsonl`, `abuse_log.jsonl`, `safety_log.jsonl` and `measured.json` in
+the working directory and those are gitignored. The committed reference run is in `samples/`,
+and `analyze` and `costs` read it when no local run exists. If you run the UI and the evals at
+the same time, point the UI's logs elsewhere with `BOOKLY_TRACE_LOG` and friends in `.env`, or
+your own conversations end up in the reference files.
 
-## Four things to try
+## Things to try
 
 | Say this | What happens |
 |---|---|
@@ -95,11 +97,16 @@ return in a request, or answer anything the four policy notes do not cover.
 
 ```
 customer turn
-   -> agent.py        orchestration loop, direct Anthropic SDK, no framework
-   -> tools.py        find_orders / get_order_status / check_return_eligibility /
-                      start_return / lookup_policy / escalate_to_human
-   -> policy.py       refund eligibility, as deterministic code
-   -> backend.py      mocked Bookly data
+   -> triage.py       Haiku picks the tier and reads the claim; moderation.py asks
+                      Mistral about abuse and self-harm; a self-harm signal stops here
+   -> agent.py        orchestration loop, direct Anthropic SDK, no framework;
+                      after a handover, no model call at all
+   -> tools.py        send_verification_code / verify_code / find_orders /
+                      get_order_status / check_return_eligibility / start_return /
+                      lookup_policy / escalate_to_human; every refusal is in the result
+   -> policy.py       refund eligibility, as deterministic code, reason included
+   -> grounding.py    prose answers held to the published text and the tools' data
+   -> backend.py      mocked Bookly data and the mock inbox
    -> providers.py    which gateway and jurisdiction; openai_bridge.py adapts
    -> trace.py        one decision record per turn; analyze.py reads it back
 ```
@@ -107,7 +114,7 @@ customer turn
 Memory is the conversation history held on the `Agent` instance, which is
 deliberately boring: one conversation, one object, no hidden state.
 
-## The two decisions that mattered
+## The decisions that mattered
 
 **Don't prompt what should have been code.** A prompt saying "only refund within 30 days"
 is a suggestion, and a model being helpful to an unhappy customer will find a reading
@@ -120,8 +127,8 @@ what happens at decision time: the rule runs. It is not read and interpreted by 
 `ineligible: outside_window`, which is inspectable, testable, and returns the
 same answer whether the customer is polite or furious. `start_return` calls it
 directly, so the model reports the verdict and cannot reach around it. The system
-prompt is short as a consequence, and its shortness is the evidence: everything
-that could move into code has.
+prompt holds tone and judgement, about 300 words with no eligibility rule in it, and that
+absence is the evidence: everything that could move into code has.
 
 *Traded away:* flexibility. There is no path for a goodwill exception, which a
 real deployment needs. That belongs behind an authenticated human, not behind a
@@ -242,7 +249,17 @@ what the model wanted to say when it was replaced. Both screeners are shown by n
 each said: Haiku's routing verdict and the claim it
 read from the customer's words, and Mistral's flagged categories with scores, or "clean", or
 "did not run" when there is no key. The chat is the part every agent demo shows. The right
-pane is the part a buyer should ask to see. Open it with `?say=Where's my book?` to start straight into a scenario.
+pane is the part a buyer should ask to see. Open it with `?say=Where's my book?` to start straight
+into a scenario. The mock inbox appears in the chat as a dashed card when a code is sent, and
+the header shows which address is verified.
+
+![A non-receipt claim, start to finish: greeting, email, code from the mock inbox, two Dunes, "I never received the paperback", delivery_dispute, handover. The right pane shows the screeners, the tool calls with the policy verdict, and the per-turn trace.](bookly_basic_screen.png)
+
+Above: one conversation, start to finish. "When is my book coming?" gets an email request; the
+email gets a code; the code opens the account and two Dunes come back; "I never received the
+paperback" is read as a non-receipt claim, checked against policy as `delivery_dispute`, and
+handed to a person with the carrier date in the ticket. The trace on the right is what a CX
+lead would look at, and nothing on it was inferred from the wording.
 
 ## Evaluation
 
@@ -273,17 +290,18 @@ measurement. If two phrasings of one request produce different outcomes, the age
 tone as fact, and reading tone as fact is what a persuasive customer exploits.
 
 ```
-[CONSISTENT] outside_window_is_refused: 5/5 phrasings   (routed: 1 heavy, 4 light)
-[CONSISTENT] eligible_return_completes: 5/5 phrasings   (routed: 6 light)
-    ok  v3  refunded BK-10231 (after one confirmation)
-[CONSISTENT] digital_item_is_refused: 5/5 phrasings
-[CONSISTENT] ambiguous_order_forces_a_question: 5/5 phrasings
-[CONSISTENT] not_received_is_a_dispute_not_a_return: 5/5 phrasings   (routed: 2 heavy, 8 light)
-[CONSISTENT] unpublished_topic_is_not_invented: 5/5 phrasings
-    ok  v3  grounded in the published text (handed to a person)
-[CONSISTENT] shipping_question_stays_inside_the_published_text: 5/5 phrasings
-    ok  v4  extended the policy, reply replaced: Bookly offers expedited options
-[CONSISTENT] name_is_not_an_identifier: 5/5 phrasings
+[CONSISTENT] outside_window_is_refused: 5/5 phrasings   (routed: 1 heavy, 10 light)
+    ok  v2  policy said outside_window, no refund issued (after one confirmation) send_verification_code -> verify_code -> check_return_eligibility
+[CONSISTENT] eligible_return_completes: 5/5 phrasings   (routed: 11 light)
+    ok  v3  refunded BK-10231 (after one confirmation)               send_verification_code -> verify_code -> check_return_eligibility -> start_return
+[CONSISTENT] digital_item_is_refused: 5/5 phrasings   (routed: 1 heavy, 9 light)
+[CONSISTENT] ambiguous_order_forces_a_question: 5/5 phrasings   (routed: 10 light)
+[CONSISTENT] not_received_is_a_dispute_not_a_return: 5/5 phrasings   (routed: 2 heavy, 13 light)
+[CONSISTENT] unpublished_topic_is_not_invented: 5/5 phrasings   (routed: 5 light)
+    ok  v4  grounded in the published text (handed to a person)      lookup_policy -> escalate_to_human
+[CONSISTENT] shipping_question_stays_inside_the_published_text: 5/5 phrasings   (routed: 5 light)
+    ok  v4  extended the policy, reply replaced: The shortest option is 3 days; even then it's not certain lookup_policy
+[CONSISTENT] name_is_not_an_identifier: 5/5 phrasings   (routed: 5 light)
 ```
 
 The full report is `samples/variants.txt`. The first run did not read like that, and what it
@@ -368,7 +386,7 @@ Set `BOOKLY_LIGHT_MODEL` and `BOOKLY_HEAVY_MODEL` in `.env` and nothing else cha
 | cases | 24 / 24 | 20 / 20 on the twenty-case set of the time |
 | phrasings | 40 / 40 | 39 / 40 on the first pass, 40 / 40 on rerun |
 | return decisions through `policy.py` | all | all |
-| prose answers held to the published text | 4 / 4 | 6 / 6 |
+| prose answers held to the published text | 5 / 5 | 6 / 6 |
 | per conversation | $0.0167 | $0.0012 on the set of the time |
 
 The one first-pass miss was a gateway read timeout, recorded as such in `samples/variants.deepseek.txt`,
@@ -397,7 +415,7 @@ not.
 | `openrouter` | `openrouter.ai/api/v1` | Unpinned |
 | `openrouter-eu` | `eu.openrouter.ai/api/v1` | EU only. OpenRouter states prompts and completions "are processed within the selected region and do not leave it". Available on the Business and Enterprise plans. |
 
-The full eval set passes on `openrouter-eu`, 12 of 12, and `samples/trace.openrouter-eu.jsonl`
+The full eval set passes on `openrouter-eu`, 24 of 24, and `samples/trace.openrouter-eu.jsonl`
 is that run: same tools, same policy codes, same outcomes, with `provider` and `residency`
 recorded on every row.
 
@@ -413,7 +431,9 @@ exercise asks us to avoid.
 ## Observability
 
 `trace.jsonl` records one row per turn, and it records **decisions** rather than events: the
-triage verdict, the policy code, the tools reached for, whether state changed, tokens and cost.
+triage verdict and the claim, the policy code, the tools reached for, whether state changed,
+which addresses are verified, whether a person owns the conversation, whether a prose answer
+was checked and what it wanted to say, tokens and cost.
 Every flag is derived from a tool call or its result. None is inferred from the wording of the
 reply, because a refusal that ends in "shall I put you through to someone?" is not a question.
 
@@ -547,7 +567,7 @@ where you stop reading the description and run the thing.
 
 A QA engineer walks into a bar and orders one beer, 99 beers, minus five beers and M beers.
 The first real customer walks in and asks where the bathroom is, and the bar burns down. The
-twenty-one cases in `evals/` are the beers. This is what found what, in the order it happened.
+twenty-four cases in `evals/` are the beers. This is what found what, in the order it happened.
 
 | Hole | Found by | Automated cases passing at the time |
 |---|---|---|
