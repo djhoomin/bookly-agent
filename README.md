@@ -14,7 +14,8 @@ knows enough to act before it acts.
 ```bash
 python -m venv .venv && .venv/bin/pip install -r requirements.txt
 cp .env.example .env                  # then fill in the keys, or: ant auth login
-.venv/bin/python -m bookly.cli        # interactive demo
+.venv/bin/python -m bookly.cli        # interactive demo, terminal
+.venv/bin/python -m bookly.web        # interactive demo, browser, with the decision pane
 .venv/bin/python -m evals.run         # the evaluation set, live
 .venv/bin/python -m evals.variants    # five phrasings of each request, live
 .venv/bin/python -m tests.test_offline   # wiring checks, no key needed
@@ -82,6 +83,15 @@ it needs a verified session, or a one-time code sent to the address on file
 before any state changes. Named here rather than in a footnote because a
 reviewer's first question about a refund agent should be "what stops me
 refunding yours".
+
+## The demo UI
+
+`python -m bookly.web` serves one page from the standard library, no framework. The
+conversation is on the left. On the right is what the agent did with the last turn: what
+triage decided and where it routed, each tool call with its arguments and the policy verdict,
+whether any state changed, and a running trace with model, tools, policy code and cost per turn.
+The chat is the part every agent demo shows. The right pane is the part a buyer should ask
+to see. Open it with `?say=Where's my book?` to start straight into a scenario.
 
 ## Evaluation
 
@@ -171,6 +181,10 @@ architecture: a small model in front deciding what the large one is allowed to b
 | `anthropic` *(default)* | Anthropic API | Anthropic's default regions |
 | `openrouter` | `openrouter.ai/api/v1` | Unpinned |
 | `openrouter-eu` | `eu.openrouter.ai/api/v1` | EU only. OpenRouter states prompts and completions "are processed within the selected region and do not leave it". Available on the Business and Enterprise plans. |
+
+The full eval set passes on `openrouter-eu`, 12 of 12, and `samples/trace.openrouter-eu.jsonl`
+is that run: same tools, same policy codes, same outcomes, with `provider` and `residency`
+recorded on every row.
 
 For a European enterprise buyer this is a procurement gate, not a preference. A support agent
 handles names, order history and complaints, so it is GDPR-bound by default. An architecture

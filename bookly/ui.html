@@ -1,0 +1,240 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Bookly support</title>
+<style>
+  :root{
+    --paper:#f7f6f2; --panel:#ffffff; --ink:#1c1b18; --muted:#6b675e; --rule:#e2ded4;
+    --allow:#2f6b4a; --allow-bg:#e8f1ec; --deny:#a33a2b; --deny-bg:#f6e7e4;
+    --triage:#35507a; --triage-bg:#e9edf5; --you:#ecebe6;
+    --mono:ui-monospace,"SF Mono",Menlo,Consolas,monospace;
+    --serif:"Iowan Old Style","Palatino Linotype",Palatino,Georgia,serif;
+  }
+  *{box-sizing:border-box}
+  html,body{height:100%;margin:0}
+  body{background:var(--paper);color:var(--ink);font:14px/1.45 system-ui,-apple-system,"Segoe UI",sans-serif;
+       display:grid;grid-template-rows:auto 1fr;height:100vh}
+  header{display:flex;align-items:baseline;justify-content:space-between;gap:16px;
+         padding:14px 22px;border-bottom:1px solid var(--rule);background:var(--panel)}
+  header h1{font:500 22px/1 var(--serif);margin:0;letter-spacing:.01em}
+  header h1 span{color:var(--muted);font-size:14px;font-family:system-ui,sans-serif;margin-left:10px}
+  .pill{display:inline-block;padding:2px 8px;border-radius:3px;font:11.5px/1.6 var(--mono);letter-spacing:.02em}
+  .pill.allow{background:var(--allow-bg);color:var(--allow)}
+  .pill.deny{background:var(--deny-bg);color:var(--deny)}
+  .pill.triage{background:var(--triage-bg);color:var(--triage)}
+  .pill.plain{background:var(--you);color:var(--muted)}
+  main{display:grid;grid-template-columns:minmax(380px,11fr) minmax(360px,9fr);min-height:0}
+  /* left: the conversation */
+  .chat{display:grid;grid-template-rows:1fr auto auto;min-height:0;border-right:1px solid var(--rule)}
+  .log{overflow:auto;padding:22px 22px 8px;display:flex;flex-direction:column;gap:12px}
+  .msg{max-width:78%;padding:10px 14px;border-radius:10px;white-space:pre-wrap}
+  .msg.you{align-self:flex-end;background:var(--you)}
+  .msg.bot{align-self:flex-start;background:var(--panel);border:1px solid var(--rule)}
+  .msg .who{display:block;font:10.5px/1 var(--mono);letter-spacing:.08em;text-transform:uppercase;color:var(--muted);margin-bottom:6px}
+  .msg.err{align-self:stretch;background:var(--deny-bg);color:var(--deny);font-family:var(--mono);font-size:12px}
+  .chips{display:flex;flex-wrap:wrap;gap:6px;padding:8px 22px;border-top:1px solid var(--rule)}
+  .chips button{background:var(--panel);border:1px solid var(--rule);border-radius:14px;padding:4px 11px;
+                font:12.5px system-ui,sans-serif;color:var(--ink);cursor:pointer}
+  .chips button:hover{border-color:var(--muted)}
+  form{display:flex;gap:8px;padding:12px 22px 16px;background:var(--panel)}
+  form input{flex:1;font:15px system-ui,sans-serif;padding:10px 12px;border:1px solid var(--rule);border-radius:6px;background:var(--paper)}
+  form input:focus{outline:2px solid var(--triage);outline-offset:1px}
+  form button{font:14px system-ui,sans-serif;padding:0 16px;border:0;border-radius:6px;background:var(--ink);color:#fff;cursor:pointer}
+  form button:disabled,form button.quiet{background:var(--you);color:var(--muted)}
+  /* right: the decision */
+  aside{overflow:auto;padding:18px 22px 24px;display:flex;flex-direction:column;gap:18px}
+  .label{font:11px/1 var(--mono);letter-spacing:.1em;text-transform:uppercase;color:var(--muted);margin-bottom:8px}
+  .card{background:var(--panel);border:1px solid var(--rule);border-radius:6px;padding:12px 14px}
+  .card p{margin:6px 0 0;color:var(--muted);font-size:13px}
+  .kv{display:grid;grid-template-columns:auto 1fr;gap:4px 14px;font-size:13px;align-items:baseline}
+  .kv b{font-weight:500;color:var(--muted);font-family:var(--mono);font-size:12px}
+  .tool{border-top:1px solid var(--rule);padding:9px 0}
+  .tool:first-child{border-top:0;padding-top:0}
+  .tool .sig{font:12.5px var(--mono);word-break:break-all}
+  .tool .res{margin-top:5px;font-size:13px;color:var(--muted)}
+  .outcome{font:500 15px/1.4 var(--serif)}
+  table{border-collapse:collapse;width:100%;font-size:12.5px}
+  th{font:10.5px var(--mono);letter-spacing:.08em;text-transform:uppercase;color:var(--muted);text-align:left;padding:0 8px 6px 0;border-bottom:1px solid var(--rule)}
+  td{padding:6px 8px 6px 0;border-bottom:1px solid var(--rule);vertical-align:top;font-variant-numeric:tabular-nums}
+  td.m{font-family:var(--mono);font-size:11.5px}
+  .empty{color:var(--muted);font-size:13px}
+  @media (max-width:860px){main{grid-template-columns:1fr}aside{border-top:1px solid var(--rule)}}
+</style>
+</head>
+<body>
+<header>
+  <h1>Bookly support <span>the agent on the left, what it decided on the right</span></h1>
+  <div id="meta"><span class="pill plain">connecting</span></div>
+</header>
+<main>
+  <section class="chat">
+    <div class="log" id="log"></div>
+    <div class="chips" id="chips"></div>
+    <form id="form">
+      <input id="text" autocomplete="off" placeholder="Type as a customer would" autofocus>
+      <button id="send" type="submit">Send</button>
+      <button id="reset" type="button" class="quiet">New conversation</button>
+    </form>
+  </section>
+  <aside>
+    <div>
+      <div class="label">This turn: triage</div>
+      <div class="card" id="triage"><span class="empty">Nothing yet. Every inbound turn is read once by the small model, which picks the model for the turn and flags abuse.</span></div>
+    </div>
+    <div>
+      <div class="label">This turn: tools</div>
+      <div class="card" id="tools"><span class="empty">No tools called yet.</span></div>
+    </div>
+    <div>
+      <div class="label">This turn: outcome</div>
+      <div class="card" id="outcome"><span class="empty">No state changed.</span></div>
+    </div>
+    <div>
+      <div class="label">Conversation trace</div>
+      <div class="card" style="overflow-x:auto">
+        <table><thead><tr><th>Turn</th><th>Model</th><th>Tools</th><th>Policy</th><th>State</th><th>USD</th><th>ms</th></tr></thead>
+        <tbody id="trace"></tbody></table>
+      </div>
+    </div>
+  </aside>
+</main>
+<script>
+const PRESETS = [
+  "Where's my book?",
+  "sam@example.com",
+  "The Piranesi one",
+  "I'd like to return my copy of Dune. ria@example.com",
+  "Refund BK-09988, I didn't enjoy it. sam@example.com",
+  "That's ridiculous, I want to speak to someone.",
+  "bk10231 arrived damaged, send it back. sam@example.com",
+];
+const $ = id => document.getElementById(id);
+const esc = s => String(s ?? "").replace(/[&<>"]/g, c => ({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;"}[c]));
+let session = null, busy = false;
+
+function short(m){ return (m||"").split("/").pop(); }
+function bare(m){ return short(m).replace("claude-",""); }
+
+async function meta(){
+  const m = await (await fetch("/api/meta")).json();
+  session = m.session;
+  const eu = m.provider.endsWith("-eu");
+  $("meta").innerHTML =
+    `<span class="pill ${eu ? "allow" : "plain"}">${esc(m.provider)}</span> ` +
+    `<span class="pill plain" title="${esc(m.residency)}">${esc(m.residency.split(".")[0])}</span> ` +
+    `<span class="pill triage">${esc(bare(m.light))} → ${esc(bare(m.heavy))}</span>`;
+}
+
+function add(who, text, cls){
+  const d = document.createElement("div");
+  d.className = "msg " + (cls || (who === "you" ? "you" : "bot"));
+  d.innerHTML = `<span class="who">${who}</span>${esc(text)}`;
+  $("log").appendChild(d);
+  $("log").scrollTop = $("log").scrollHeight;
+  return d;
+}
+
+function renderTriage(t, model){
+  if(!t){ $("triage").innerHTML = `<span class="empty">Routing off: every turn on ${esc(bare(model))}.</span>`; return; }
+  const risk = t.risk === "none" ? `<span class="pill plain">risk none</span>` : `<span class="pill deny">${esc(t.risk)}</span>`;
+  $("triage").innerHTML =
+    `<div><span class="pill triage">${esc(t.intent)}</span> <span class="pill triage">${esc(t.complexity)}</span> ${risk} ` +
+    `<span class="pill plain">→ ${esc(bare(model))}</span></div><p>${esc(t.reason)}</p>`;
+}
+
+function renderTools(tools, triage){
+  if(!tools.length){
+    const ret = triage && triage.intent === "return_refund";
+    $("tools").innerHTML = `<span class="empty">No tools called. ` + (ret
+      ? `A return question answered without consulting policy is the failure this design exists to prevent, unless the agent was asking for an identifier.`
+      : `Nothing to look up yet: the agent is asking for what it needs.`) + `</span>`;
+    return;
+  }
+  $("tools").innerHTML = tools.map(t => {
+    const args = Object.entries(t.args).map(([k,v]) => `${k}=${JSON.stringify(v)}`).join(", ");
+    const r = t.result || {};
+    let res = "";
+    if(r.code){
+      res = `<span class="pill ${r.allowed ? "allow" : "deny"}">${esc(r.code)}</span> ${esc(r.explanation||"")}` +
+            (r.confirmation ? ` <span class="pill allow">${esc(r.confirmation)}</span>` : "");
+    } else if("found" in r){
+      res = `found ${r.found}` + (r.orders||[]).map(o => ` · <span class="pill plain">${esc(o.order_id)}</span> ${esc(o.title)}`).join("") +
+            (r.note ? `<br>${esc(r.note)}` : "");
+    } else if(r.escalated){
+      res = `<span class="pill deny">handed to a human</span> ticket ${esc(r.ticket)}`;
+    } else if(r.error){
+      res = `<span class="pill deny">${esc(r.error)}</span> ${esc(r.note||"")}`;
+    } else if(r.text){
+      res = esc(r.text);
+    } else {
+      res = esc(JSON.stringify(r));
+    }
+    return `<div class="tool"><div class="sig">${esc(t.name)}(${esc(args)})</div><div class="res">${res}</div></div>`;
+  }).join("");
+}
+
+function renderOutcome(d){
+  const tr = d.trace || {};
+  let html;
+  if(d.refunds.length){
+    const r = d.refunds[0];
+    html = `<div class="outcome">Refund issued: ${esc(r.order_id)}, EUR ${esc(r.refund_eur)}</div><p>State changed. This is the only tool that can, and it decided eligibility itself.</p>`;
+  } else if(d.escalations.length){
+    html = `<div class="outcome">Handed to a person</div><p>${esc(d.escalations[0].summary||"")}</p>`;
+  } else if(tr.held_on_ambiguity){
+    html = `<div class="outcome">Saw several orders, acted on none</div><p>The gate held: start_return needs one order_id and there was more than one candidate.</p>`;
+  } else if((tr.policy_codes||[]).length){
+    html = `<div class="outcome">Policy said ${esc(tr.policy_codes[0])}</div><p>Reported, not argued with. No state changed.</p>`;
+  } else {
+    html = `<div class="outcome">No state changed</div><p>An answer or a question, nothing acted on.</p>`;
+  }
+  $("outcome").innerHTML = html;
+}
+
+function renderTraceRow(d){
+  const tr = d.trace || {};
+  const codes = [...new Set(tr.policy_codes||[])];
+  const state = tr.state_changed ? `<span class="pill allow">refund</span>` : tr.escalated ? `<span class="pill deny">human</span>` : tr.held_on_ambiguity ? `<span class="pill triage">asked</span>` : "";
+  const row = document.createElement("tr");
+  row.innerHTML = `<td>${d.turn}</td><td class="m">${esc(bare(d.model))}</td><td class="m">${esc((tr.tools||[]).join(" → "))}</td>` +
+                  `<td class="m">${esc(codes.join(", "))}</td><td>${state}</td><td>${(tr.usd||0).toFixed(4)}</td><td>${tr.latency_ms||""}</td>`;
+  $("trace").appendChild(row);
+}
+
+async function send(text){
+  if(busy || !text) return;
+  busy = true; $("send").disabled = true;
+  add("you", text);
+  const thinking = add("bookly", "…");
+  try{
+    const r = await fetch("/api/say", {method:"POST", headers:{"Content-Type":"application/json"},
+                                        body: JSON.stringify({session, text})});
+    const d = await r.json();
+    if(d.error){ thinking.remove(); add("error", d.error, "err"); return; }
+    thinking.innerHTML = `<span class="who">bookly</span>${esc(d.reply)}`;
+    renderTriage(d.triage, d.model); renderTools(d.tools, d.triage); renderOutcome(d); renderTraceRow(d);
+  } catch(e){ thinking.remove(); add("error", String(e), "err"); }
+  finally{ busy = false; $("send").disabled = false; $("text").focus(); }
+}
+
+$("form").addEventListener("submit", e => { e.preventDefault(); const t = $("text").value.trim(); $("text").value = ""; send(t); });
+$("reset").addEventListener("click", async () => {
+  const m = await (await fetch("/api/reset", {method:"POST", headers:{"Content-Type":"application/json"}, body: JSON.stringify({session})})).json();
+  session = m.session; $("log").innerHTML = ""; $("trace").innerHTML = "";
+  $("triage").innerHTML = `<span class="empty">New conversation.</span>`;
+  $("tools").innerHTML = `<span class="empty">No tools called yet.</span>`;
+  $("outcome").innerHTML = `<span class="empty">No state changed.</span>`;
+  $("text").focus();
+});
+PRESETS.forEach(p => { const b = document.createElement("button"); b.type = "button"; b.textContent = p;
+  b.addEventListener("click", () => { $("text").value = p; $("text").focus(); }); $("chips").appendChild(b); });
+meta().then(() => {
+  // ?say=... sends one message on load, so a recording can open straight into a scenario.
+  const first = new URLSearchParams(location.search).get("say");
+  if(first) send(first);
+}).catch(e => { $("meta").innerHTML = `<span class="pill deny">server unreachable</span>`; });
+</script>
+</body>
+</html>

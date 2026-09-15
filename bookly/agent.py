@@ -69,6 +69,9 @@ class Agent:
     #: pass: once routing works, resolution calls run on the small model too.
     usage: list[tuple[str, str, int, int]] = field(default_factory=list)
     _client: Any = None
+    #: The decision record for the most recent turn, for callers that want
+    #: to show it rather than read it back from the log.
+    last_trace: Any = None
     on_tool: Callable[[str, dict, dict], None] | None = None
     on_triage: Callable[[Any], None] | None = None
 
@@ -148,6 +151,7 @@ class Agent:
                     and not trace.state_changed)
                 trace.latency_ms = int((time.monotonic() - started) * 1000)
                 trace.write()
+                self.last_trace = trace
                 return reply
 
             results = []
@@ -176,6 +180,7 @@ class Agent:
         trace.usd = self._usd(self.usage[usage_start:])
         trace.latency_ms = int((time.monotonic() - started) * 1000)
         trace.write()
+        self.last_trace = trace
         return ("I am having trouble completing that. Let me put you through to a "
                 "colleague who can help.")
 
