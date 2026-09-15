@@ -9,6 +9,16 @@ produces agents which confidently do the wrong thing rather than hand over. The
 target here is *resolution without harm*, which means the agent has to prove it
 knows enough to act before it acts.
 
+**The shape is not new.** Banking and insurance have run automated decisions for decades on
+one rule: where risk is low the system decides alone, and where uncertainty passes what the
+business will tolerate a person makes the final call, and the system never pretends otherwise.
+Every piece here maps onto that. Triage is the risk score. The policy function is the rules
+engine. Escalation is the manual-review queue. The rule that the agent makes no further call
+once a person has the conversation is case ownership. Buyers remember the dealership chatbot
+that agreed to sell a Tahoe for a dollar, and the airline a tribunal held liable for a
+bereavement fare its chatbot invented. Both were a model extending itself under pressure, and
+both set the tolerance a support agent has to be built for.
+
 ## Run it
 
 ```bash
