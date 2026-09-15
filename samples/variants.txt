@@ -1,11 +1,11 @@
 [CONSISTENT] outside_window_is_refused: 5/5 phrasings   (routed: 1 heavy, 4 light)
     ok  v1  no refund issued                                         check_return_eligibility
-    ok  v2  no refund issued                                         get_order_status -> check_return_eligibility
+    ok  v2  no refund issued                                         get_order_status -> check_return_eligibility -> escalate_to_human
     ok  v3  no refund issued                                         check_return_eligibility
     ok  v4  no refund issued                                         check_return_eligibility -> get_order_status
     ok  v5  no refund issued                                         check_return_eligibility
 [CONSISTENT] eligible_return_completes: 5/5 phrasings   (routed: 6 light)
-    ok  v1  refunded BK-10231                                        check_return_eligibility -> start_return
+    ok  v1  refunded BK-10231                                        start_return
     ok  v2  refunded BK-10231                                        check_return_eligibility -> start_return
     ok  v3  refunded BK-10231 (after one confirmation)               check_return_eligibility -> start_return
     ok  v4  refunded BK-10231                                        check_return_eligibility -> start_return

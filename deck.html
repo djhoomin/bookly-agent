@@ -113,8 +113,8 @@
     <div class="stack">
       <span class="label">Request path</span>
       <div class="flow">
-        <div class="step"><span class="k">triage.py</span><span class="v">Haiku 4.5 screens every
-          turn: intent, complexity, risk. Picks the model and flags abuse in one call.</span></div>
+        <div class="step"><span class="k">triage.py</span><span class="v">Haiku 4.5 picks the model tier
+          for every turn. Mistral moderation decides abuse; Haiku keeps bookstore fraud.</span></div>
         <div class="step"><span class="k">agent.py</span><span class="v">Orchestration loop.
           Anthropic SDK called directly, bounded tool-use rounds.</span></div>
         <div class="step"><span class="k">tools.py</span><span class="v">find_orders &middot;
@@ -198,13 +198,15 @@ if age &gt; RETURN_WINDOW_DAYS:
       same text.</p>
       <table>
         <tr><th></th><th>Per conversation</th><th>10k/day</th><th>Per year</th></tr>
-        <tr><td class="case">routed</td><td>$0.0070</td><td>$70</td><td>$25,630</td></tr>
-        <tr><td class="case">all&nbsp;Opus</td><td>$0.0239</td><td>$239</td><td>$87,367</td></tr>
-        <tr><td class="case"><strong>saved</strong></td><td><strong>71%</strong></td><td></td>
-            <td><strong>$61,737</strong></td></tr>
+        <tr><td class="case">routed</td><td>$0.0099</td><td>$99</td><td>$36,119</td></tr>
+        <tr><td class="case">all&nbsp;Opus</td><td>$0.0254</td><td>$254</td><td>$92,798</td></tr>
+        <tr><td class="case"><strong>saved</strong></td><td><strong>61%</strong></td><td></td>
+            <td><strong>$56,679</strong></td></tr>
       </table>
-      <p style="font-size:13px">Measured from 44 real API calls across the eval suite, at list
-      prices. Eleven of twelve conversations never touched Opus.</p>
+      <p style="font-size:13px">Measured from 63 real API calls across the eval suite, at list
+      prices. Eleven of thirteen conversations never touched Opus: the two that did were the
+      fraud signal and the threat, because risk routes heavy. An abusive customer costs more,
+      and the trace shows it.</p>
     </div>
     <div class="stack">
       <span class="label">Why a misrouted turn is survivable</span>
@@ -219,10 +221,12 @@ if age &gt; RETURN_WINDOW_DAYS:
       A triage miss costs a less polished reply, never a wrong refund.</p>
       <div class="trade">
         <div class="label">And the second job</div>
-        <p style="font-size:13.5px">Claimed authority to override policy is flagged
-        <span class="mono">fraud_signal</span>, routed to Opus, refused by policy anyway, and
-        written to <span class="mono">abuse_log.jsonl</span> with the message attached. A flag
-        without its text cannot be reviewed.</p>
+        <p style="font-size:13.5px">Two screeners. Mistral's moderation model decides abuse: a threat
+        scores 0.65 <span class="mono">violence_and_threats</span>, is logged, and the eligible
+        refund still goes through, because tone is not policy. Haiku keeps what no general
+        moderation model knows: claimed authority to override policy is
+        <span class="mono">fraud_signal</span>, routed to Opus, refused anyway. Both land in
+        <span class="mono">abuse_log.jsonl</span> with the message attached.</p>
       </div>
     </div>
   </div>
@@ -231,7 +235,7 @@ if age &gt; RETURN_WINDOW_DAYS:
 
 <section class="slide">
   <div class="eyebrow"><span>Evidence, and what I would change first</span><span>05 / Evals</span></div>
-  <h2>Seven of twelve cases pass only if the agent refuses or asks.</h2>
+  <h2>Seven of thirteen cases pass only if the agent refuses or asks.</h2>
   <div class="cols">
     <div class="stack">
       <table class="dense" style="font-size:12px">
@@ -258,6 +262,8 @@ if age &gt; RETURN_WINDOW_DAYS:
             <td><span class="pill allow">pass</span></td></tr>
         <tr><td class="case">typo_in_id</td><td>refund fires</td>
             <td><span class="pill allow">pass</span></td></tr>
+        <tr><td class="case">threat_still_served</td><td>flagged 0.65, refund fires</td>
+            <td><span class="pill allow">pass</span></td></tr>
         <tr><td class="case">asks_for_human</td><td>escalation fires</td>
             <td><span class="pill allow">pass</span></td></tr>
       </table>
@@ -266,7 +272,7 @@ if age &gt; RETURN_WINDOW_DAYS:
     </div>
     <div class="stack" style="justify-content:space-between">
       <div class="stack" style="gap:10px">
-        <div class="big" style="font-size:42px">12 / 12<span class="sub">routing on, cold, no
+        <div class="big" style="font-size:42px">13 / 13<span class="sub">routing on, cold, no
           retries. Five start with no identifier at all. Five phrasings of five requests, terse
           to furious, land on the same outcome 25 times of 25. The trace then answers the
           operating questions with no extra instrumentation: 92% resolved without a human, every eligibility decision
@@ -285,7 +291,7 @@ if age &gt; RETURN_WINDOW_DAYS:
       </div>
       <div class="trade">
         <div class="label">What I would change first, given a production context</div>
-        <p style="font-size:13px">Build the eval set from real transcripts. These twelve test
+        <p style="font-size:13px">Build the eval set from real transcripts. These thirteen test
         failures I thought of, which is the weakest kind of test. A public adversarial set such as
         <span class="mono">deepset/prompt-injections</span> (662 rows, Apache 2.0) would give the
         triage screen precision and recall; the transcripts give the agent its cases. Then
@@ -293,7 +299,7 @@ if age &gt; RETURN_WINDOW_DAYS:
       </div>
     </div>
   </div>
-  <div class="foot"><span>evals/ &middot; 12 cases</span><span>05</span></div>
+  <div class="foot"><span>evals/ &middot; 13 cases</span><span>05</span></div>
 </section>
 
 </body>
