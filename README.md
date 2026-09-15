@@ -112,7 +112,7 @@ architecture: a small model in front deciding what the large one is allowed to b
 |---|---|---|
 | `anthropic` *(default)* | Anthropic API | Anthropic's default regions |
 | `openrouter` | `openrouter.ai/api/v1` | Unpinned |
-| `openrouter-eu` | `eu.openrouter.ai/api/v1` | EU only. OpenRouter states prompts and completions "are processed within the selected region and do not leave it". Enterprise plan, enabled by request. |
+| `openrouter-eu` | `eu.openrouter.ai/api/v1` | EU only. OpenRouter states prompts and completions "are processed within the selected region and do not leave it". Available on the Business and Enterprise plans. |
 
 For a European enterprise buyer this is a procurement gate, not a preference. A support agent
 handles names, order history and complaints, so it is GDPR-bound by default. An architecture

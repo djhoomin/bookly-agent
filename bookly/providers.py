@@ -14,7 +14,8 @@ same request shape:
   openrouter  OpenAI-compatible gateway, many models behind one key.
   openrouter-eu  the same gateway pinned to https://eu.openrouter.ai, where
               OpenRouter states prompts and completions "are processed within the
-              selected region and do not leave it". Enterprise-only, by request.
+              selected region and do not leave it". Available on the Business and
+              Enterprise plans.
 
 The point being made is not that one is better. It is that the choice is
 configuration, so a deployment that must stay in the EU changes an environment
@@ -64,7 +65,7 @@ PROVIDERS = {
     "openrouter-eu": Provider(
         "openrouter-eu", "https://eu.openrouter.ai/api/v1", "OPENROUTER_API_KEY",
         "EU only. Prompts and completions are processed within the region and do "
-        "not leave it. Enterprise plan, enabled by request."),
+        "not leave it. Business and Enterprise plans."),
 }
 
 
