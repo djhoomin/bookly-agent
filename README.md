@@ -107,7 +107,12 @@ deliberately boring: one conversation, one object, no hidden state.
 
 **Don't prompt what should have been code.** A prompt saying "only refund within 30 days"
 is a suggestion, and a model being helpful to an unhappy customer will find a reading
-of it that permits yes. Deterministic is almost always preferable. `policy.refund_eligibility` returns
+of it that permits yes. Deterministic is almost always preferable. How the code gets written
+does not matter: typed by an engineer, generated from a procedure a CX team wrote in plain
+language, or both. Decagon's own description of an AOP is that it combines "the power and
+flexibility of natural language with the precision and rigor of code", with engineers keeping
+control of the core systems and enforcing the rules. That is the same claim. What matters is
+what happens at decision time: the rule runs. It is not read and interpreted by the model. `policy.refund_eligibility` returns
 `ineligible: outside_window`, which is inspectable, testable, and returns the
 same answer whether the customer is polite or furious. `start_return` calls it
 directly, so the model reports the verdict and cannot reach around it. The system

@@ -177,12 +177,13 @@ if age &gt; RETURN_WINDOW_DAYS:
         f"Delivered {age} days ago, outside "
         f"the {RETURN_WINDOW_DAYS}-day window.")</pre>
       <p style="font-size:13.5px"><span class="mono">start_return</span> calls this itself, so the
-      model reports the verdict and cannot reach around it.</p>
+      model reports the verdict and cannot reach around it. How the code gets written does not
+      matter, typed or generated from a procedure a CX team wrote in plain language. What matters
+      is that at decision time the rule runs; the model does not interpret it.</p>
       <p style="font-size:13.5px">General questions have no verdict, the answer <em>is</em> the prose, so
-      a second model reads every such reply against the published text it looked up. "Usually 2
-      days" where the text says 3 to 7, or a student discount Bookly does not publish, gets
-      replaced with the published text and an offer of a person. Same rule, applied to words: the
-      model may explain the policy and may not extend it.</p>
+      a second model reads every such reply against the published text. "Usually 2 days" where the
+      text says 3 to 7 gets replaced with the text and an offer of a person. Same rule, applied to
+      words: the model may explain the policy and may not extend it.</p>
     </div>
     <div class="stack">
       <span class="label">Every refusal has a code, not a mood</span>
