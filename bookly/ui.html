@@ -50,6 +50,11 @@
   .card p{margin:6px 0 0;color:var(--muted);font-size:13px}
   .kv{display:grid;grid-template-columns:auto 1fr;gap:4px 14px;font-size:13px;align-items:baseline}
   .kv b{font-weight:500;color:var(--muted);font-family:var(--mono);font-size:12px}
+  .screen{display:grid;grid-template-columns:auto 1fr;gap:6px 12px;align-items:baseline;font-size:13px}
+  .screen .who{font:11px var(--mono);letter-spacing:.04em;color:var(--muted);white-space:nowrap;padding-top:2px}
+  .screen .who small{display:block;font-size:10px;letter-spacing:.08em;text-transform:uppercase;opacity:.75}
+  .screen .said{display:flex;flex-wrap:wrap;gap:4px 6px;align-items:baseline}
+  .screen .off{color:var(--muted);font-style:italic}
   .tool{border-top:1px solid var(--rule);padding:9px 0}
   .tool:first-child{border-top:0;padding-top:0}
   .tool .sig{font:12.5px var(--mono);word-break:break-all}
@@ -80,7 +85,7 @@
   </section>
   <aside>
     <div>
-      <div class="label">This turn: triage</div>
+      <div class="label">This turn: two screeners</div>
       <div class="card" id="triage"><span class="empty">Nothing yet. Every inbound turn is read once by the small model, which picks the model for the turn and flags abuse.</span></div>
     </div>
     <div>
@@ -112,19 +117,20 @@ const PRESETS = [
 ];
 const $ = id => document.getElementById(id);
 const esc = s => String(s ?? "").replace(/[&<>"]/g, c => ({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;"}[c]));
-let session = null, busy = false;
+let session = null, busy = false, META = {};
 
 function short(m){ return (m||"").split("/").pop(); }
 function bare(m){ return short(m).replace("claude-",""); }
 
 async function meta(){
   const m = await (await fetch("/api/meta")).json();
-  session = m.session;
+  META = m; session = m.session;
   const eu = m.provider.endsWith("-eu");
   $("meta").innerHTML =
     `<span class="pill ${eu ? "allow" : "plain"}">${esc(m.provider)}</span> ` +
     `<span class="pill plain" title="${esc(m.residency)}">${esc(m.residency.split(".")[0])}</span> ` +
-    `<span class="pill triage">${esc(bare(m.light))} → ${esc(bare(m.heavy))}</span>`;
+    `<span class="pill triage">${esc(bare(m.light))} → ${esc(bare(m.heavy))}</span> ` +
+    (m.moderation ? `<span class="pill allow">${esc(m.moderation)}</span>` : `<span class="pill deny">no moderation key</span>`);
 }
 
 function add(who, text, cls){
@@ -138,10 +144,27 @@ function add(who, text, cls){
 
 function renderTriage(t, model){
   if(!t){ $("triage").innerHTML = `<span class="empty">Routing off: every turn on ${esc(bare(model))}.</span>`; return; }
-  const risk = t.risk === "none" ? `<span class="pill plain">risk none</span>` : `<span class="pill deny">${esc(t.risk)}</span>`;
-  $("triage").innerHTML =
-    `<div><span class="pill triage">${esc(t.intent)}</span> <span class="pill triage">${esc(t.complexity)}</span> ${risk} ` +
-    `<span class="pill plain">→ ${esc(bare(model))}</span> <span class="pill plain">risk by ${esc(t.screener||"haiku")}</span></div><p>${esc(t.reason)}</p>`;
+  // Two screeners, each named, each with what it said. Haiku routes and keeps
+  // bookstore fraud; Mistral decides abuse and self-harm when it ran.
+  const haikuRisk = t.screener === "haiku" && t.risk !== "none"
+    ? `<span class="pill deny">${esc(t.risk)}</span>` : `<span class="pill plain">no fraud signal</span>`;
+  const routing = `<div class="who">${esc(bare(META.light||"haiku-4-5"))}<small>routing</small></div>` +
+    `<div class="said"><span class="pill triage">${esc(t.intent)}</span><span class="pill triage">${esc(t.complexity)}</span>` +
+    `<span class="pill plain">→ ${esc(bare(model))}</span>${haikuRisk}` +
+    (t.claim && t.claim !== "none" ? `<span class="pill ${t.claim === "not_received" ? "deny" : "plain"}">claim: ${esc(t.claim)}</span>` : "") + `</div>`;
+  let mod;
+  if(!t.moderated){
+    mod = `<span class="off">did not run, no key. Haiku's risk field stands: ` +
+          (t.risk === "none" ? `none` : esc(t.risk)) + `</span>`;
+  } else {
+    const flagged = Object.entries(t.moderation||{});
+    mod = flagged.length
+      ? flagged.map(([c,s]) => `<span class="pill deny">${esc(c)} ${Number(s).toFixed(2)}</span>`).join("") +
+        (t.screener === "mistral" ? `<span class="pill deny">→ ${esc(t.risk)}</span>` : "")
+      : `<span class="pill allow">clean</span>`;
+  }
+  const moderation = `<div class="who">${esc(META.moderation || "mistral moderation")}<small>abuse</small></div><div class="said">${mod}</div>`;
+  $("triage").innerHTML = `<div class="screen">${routing}${moderation}</div><p>${esc(t.reason)}</p>`;
 }
 
 function renderTools(tools, triage){

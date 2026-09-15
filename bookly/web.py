@@ -16,6 +16,7 @@ from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from pathlib import Path
 
 from .agent import Agent
+from .moderation import MODEL as MODERATION_MODEL, enabled as moderation_enabled
 from .providers import active
 
 PAGE = Path(__file__).with_name("ui.html")
@@ -70,6 +71,7 @@ class Handler(BaseHTTPRequestHandler):
             p = active()
             return self._json({"provider": p.name, "residency": p.residency,
                                "heavy": p.model("heavy"), "light": p.model("light"),
+                               "moderation": MODERATION_MODEL if moderation_enabled() else "",
                                "session": uuid.uuid4().hex})
         body = PAGE.read_bytes()
         self.send_response(200)
