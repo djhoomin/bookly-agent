@@ -223,6 +223,64 @@ def test_customer_claim_overrides_the_models_reason():
     assert r["code"] == "eligible" and r["reason"] == "damaged"
 
 
+def test_free_text_policy_lookup():
+    from bookly.backend import find_policy
+    assert find_policy("how long does delivery take")[0] == "shipping"
+    assert find_policy("I forgot my password")[0] == "password"
+    assert find_policy("can I cancel my order")[0] == "cancellation"
+    assert find_policy("student discount") is None
+    from bookly.tools import Outcome, dispatch
+    out = Outcome()
+    r = dispatch("lookup_policy", {"topic": "student discount"}, out)
+    assert r["found"] is False and out.policy_sources == [""]
+
+
+def test_extended_policy_is_replaced_and_recorded():
+    from bookly import grounding
+    from bookly.tools import Outcome
+
+    class Scripted:
+        """Looks up shipping, then answers with an invented 'usually 2 days'."""
+        def __init__(self, unsupported):
+            self.messages, self.n, self.unsupported = self, 0, unsupported
+        def create(self, **kw):
+            self.n += 1
+            u = types.SimpleNamespace(input_tokens=1, output_tokens=1)
+            if kw.get("output_config") and "SOURCE" in str(kw["messages"][0]["content"]):
+                block = types.SimpleNamespace(type="text", text=json.dumps({"unsupported": self.unsupported}))
+            elif kw.get("output_config"):
+                block = types.SimpleNamespace(type="text", text='{"intent":"general_question",'
+                    '"complexity":"simple","risk":"none","claim":"none","reason":""}')
+            elif self.n == 2:
+                block = types.SimpleNamespace(type="tool_use", id="t1", name="lookup_policy",
+                                              input={"topic": "shipping to germany"})
+            else:
+                block = types.SimpleNamespace(type="text", text="Usually 2 days to Germany.")
+            return types.SimpleNamespace(content=[block], usage=u)
+
+    agent = Agent(_client=Scripted(["usually 2 days"]))
+    reply = agent.say("how long to germany?")
+    assert agent.last_trace.reply_replaced and agent.last_trace.unsupported == ["usually 2 days"]
+    assert "3 to 7 elsewhere" in reply and "Usually 2 days" not in reply
+    assert agent.history[-1].content[0]["text"] == reply, "history must say what the customer saw"
+    assert any(r[0] == "ground" for r in agent.usage)
+
+    agent = Agent(_client=Scripted([]))
+    reply = agent.say("how long to germany?")
+    assert not agent.last_trace.reply_replaced and agent.last_trace.grounded
+    assert reply == "Usually 2 days to Germany."
+
+
+def test_order_facts_are_not_checked_against_policy():
+    """A turn that answered from find_orders has no policy source; the grounder
+    must not run, or it would replace the truth with 'nothing published'."""
+    agent = Agent(_client=ScriptedTools([("find_orders", {"email": "sam@example.com"})]))
+    agent.say("sam@example.com")
+    assert not agent.last_trace.checked_against_policy
+    assert not agent.last_trace.reply_replaced
+    assert not any(r[0] == "ground" for r in agent.usage)
+
+
 def test_start_return_records_the_decision():
     from bookly.tools import Outcome, dispatch
     out = Outcome()

@@ -24,7 +24,7 @@ from __future__ import annotations
 import re
 from typing import Any
 
-from .backend import POLICY_NOTES, find_orders_by_email, get_order
+from .backend import find_orders_by_email, find_policy, get_order
 from .policy import REASONS, refund_eligibility
 
 EMAIL = re.compile(r"^[^@\s]+@[^@\s]+\.[^@\s]+$")
@@ -98,13 +98,17 @@ TOOLS: list[dict[str, Any]] = [
         "name": "lookup_policy",
         "description": (
             "Read Bookly's published policy text on a topic, for answering general "
-            "questions. Topics: returns, shipping, password. This is customer-facing "
-            "prose, not a decision: for a specific order use check_return_eligibility."
+            "questions. Always call this before answering any question about how "
+            "Bookly works: shipping, returns, passwords, cancellations, discounts, "
+            "anything. If nothing is published on the topic, say so and offer a person; "
+            "never fill the gap yourself. This is customer-facing prose, not a decision: "
+            "for a specific order use check_return_eligibility."
         ),
         "input_schema": {
             "type": "object",
             "properties": {
-                "topic": {"type": "string", "enum": ["returns", "shipping", "password"]}
+                "topic": {"type": "string",
+                          "description": "The customer's question or topic, in plain words"}
             },
             "required": ["topic"],
         },
@@ -139,6 +143,10 @@ class Outcome:
         self.calls: list[str] = []
         #: Every policy code returned this conversation, in order.
         self.decisions: list[str] = []
+        #: Published policy text handed to the model, one entry per lookup_policy
+        #: call; empty string when nothing was published. The grounding check
+        #: holds the reply to these.
+        self.policy_sources: list[str] = []
         #: The customer's claim as the screener read it, sticky for the
         #: conversation. Set by the agent, read by the policy tools. Once a
         #: customer has said an order never arrived, no later "just refund it"
@@ -232,7 +240,15 @@ def dispatch(name: str, args: dict[str, Any], outcome: Outcome) -> dict[str, Any
 
     if name == "lookup_policy":
         topic = args.get("topic", "")
-        return {"topic": topic, "text": POLICY_NOTES.get(topic, "No published policy on that.")}
+        found = find_policy(topic)
+        if not found:
+            outcome.policy_sources.append("")
+            return {"topic": topic, "found": False, "text": "",
+                    "note": "Bookly publishes nothing on this. Tell the customer that plainly "
+                            "and offer a person. Do not invent an answer."}
+        key, text = found
+        outcome.policy_sources.append(text)
+        return {"topic": key, "found": True, "text": text}
 
     if name == "escalate_to_human":
         outcome.escalations.append(dict(args))

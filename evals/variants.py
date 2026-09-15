@@ -26,8 +26,8 @@ from dataclasses import dataclass
 from typing import Callable
 
 from bookly.agent import Agent
-from evals.cases import (_asked_rather_than_guessed, _asked_which_order, _no_refund,
-                         _refunded)
+from evals.cases import (_asked_rather_than_guessed, _asked_which_order, _grounded,
+                         _no_refund, _refunded)
 from evals.run import fatal
 
 
@@ -120,6 +120,34 @@ SCENARIOS: list[Scenario] = [
             ["sam@example.com here, so the tracking says delivered but there's nothing here, "
              "I've checked with the neighbours and everything",
              "the idiot, dostoevsky, can i just get my money back"],
+        ],
+    ),
+    Scenario(
+        "unpublished_topic_is_not_invented",
+        _grounded(expect_source=False),
+        [
+            ["Do you offer a student discount? I'm at Utrecht."],
+            ["student discount?"],
+            ["Hi! I was wondering whether Bookly has any kind of discount for students, "
+             "I'm doing my master's and books are expensive. Thanks so much!"],
+            ["Every other bookshop gives students 10%. What's yours? And don't tell me "
+             "to ask someone else."],
+            ["so im a student and i buy a lot of books from you, is there like a "
+             "student price or a loyalty thing or anything"],
+        ],
+    ),
+    Scenario(
+        "shipping_question_stays_inside_the_published_text",
+        _grounded(expect_source=True),
+        [
+            ["How long does delivery take to Germany, and can I track it?"],
+            ["shipping time germany?"],
+            ["Good afternoon. Could you tell me roughly how long a parcel takes to reach "
+             "Berlin, and whether I would receive tracking details? Many thanks."],
+            ["I need this by Friday. How fast can you get a book to Germany? Give me a "
+             "straight answer, not a range."],
+            ["ordering from germany, how long til it shows up and do i get a tracking "
+             "number or do i just wait and hope"],
         ],
     ),
     Scenario(

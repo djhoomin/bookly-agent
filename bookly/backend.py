@@ -53,9 +53,34 @@ POLICY_NOTES: dict[str, str] = {
     "returns": "Physical books can be returned within 30 days of delivery for a full refund. "
                "Digital items are non-returnable once downloaded.",
     "shipping": "Standard delivery is 2 to 4 working days in the Netherlands, 3 to 7 elsewhere "
-                "in the EU. Tracking is emailed when the parcel leaves the warehouse.",
+                "in the EU. Bookly ships within the EU only. Tracking is emailed when the "
+                "parcel leaves the warehouse.",
     "password": "Use 'Forgot password' on the sign-in page. The reset link is valid for one hour.",
+    "cancellation": "An order can be cancelled free of charge until it leaves the warehouse. "
+                    "After that, wait for delivery and start a return.",
 }
+
+#: Words that point at each note. A free-text topic is matched here so the
+#: model never has to guess an enum, and "nothing published" is a real result
+#: rather than a tool it could not call.
+POLICY_KEYWORDS: dict[str, tuple[str, ...]] = {
+    "returns": ("return", "refund", "send back", "window", "money back", "exchange"),
+    "shipping": ("ship", "deliver", "delivery", "post", "tracking", "how long", "arrive",
+                 "countries", "country", "abroad", "international"),
+    "password": ("password", "log in", "login", "sign in", "reset", "locked out", "account access"),
+    "cancellation": ("cancel", "cancellation", "change my order", "stop the order"),
+}
+
+
+def find_policy(topic: str) -> tuple[str, str] | None:
+    """The best-matching published note for a free-text topic, or None."""
+    needle = (topic or "").lower()
+    best, score = None, 0
+    for key, words in POLICY_KEYWORDS.items():
+        hits = sum(1 for w in words if w in needle) + (2 if key in needle else 0)
+        if hits > score:
+            best, score = key, hits
+    return (best, POLICY_NOTES[best]) if best else None
 
 
 def find_orders_by_email(email: str) -> list[Order]:

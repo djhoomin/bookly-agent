@@ -63,6 +63,14 @@ class TurnTrace:
     #: held. Usually that means the agent asked which; it can also mean it found
     #: nothing matching and said so. Either way it did not guess.
     held_on_ambiguity: bool = False
+    #: prose answers are held to the published text they looked up
+    checked_against_policy: bool = False
+    #: topics the customer asked about that Bookly publishes nothing on. The
+    #: list a policy team wants: what people ask that we have no answer for.
+    policy_misses: list[str] = field(default_factory=list)
+    grounded: bool = True
+    unsupported: list[str] = field(default_factory=list)
+    reply_replaced: bool = False
     # what it cost, this turn only, triage call included
     tokens_in: int = 0
     tokens_out: int = 0

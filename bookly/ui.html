@@ -116,6 +116,7 @@ const PRESETS = [
   "bk10231 arrived damaged, send it back. sam@example.com",
   "I never got my book. sam@example.com",
   "How do I reset my password?",
+  "Do you offer a student discount?",
 ];
 const $ = id => document.getElementById(id);
 const esc = s => String(s ?? "").replace(/[&<>"]/g, c => ({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;"}[c]));
@@ -191,6 +192,8 @@ function renderTools(tools, triage){
       res = `<span class="pill deny">handed to a human</span> ticket ${esc(r.ticket)}`;
     } else if(r.error){
       res = `<span class="pill deny">${esc(r.error)}</span> ${esc(r.note||"")}`;
+    } else if("found" in r && !("orders" in r)){
+      res = r.found ? `<span class="pill allow">published</span> ${esc(r.text)}` : `<span class="pill deny">nothing published</span> ${esc(r.note||"")}`;
     } else if(r.text){
       res = esc(r.text);
     } else {
@@ -212,6 +215,10 @@ function renderOutcome(d){
     html = `<div class="outcome">Saw several orders, acted on none</div><p>The gate held: start_return needs one order_id and there was more than one candidate.</p>`;
   } else if((tr.policy_codes||[]).length){
     html = `<div class="outcome">Policy said ${esc(tr.policy_codes[0])}</div><p>Reported, not argued with. No state changed.</p>`;
+  } else if(tr.checked_against_policy){
+    html = tr.reply_replaced
+      ? `<div class="outcome">Reply replaced: it extended the policy</div><p>Unsupported: ${esc((tr.unsupported||[]).join("; "))}. The customer got the published text instead.</p>`
+      : `<div class="outcome">Answered from published policy</div><p>Every Bookly fact in the reply is in the text the agent looked up. Checked by a second model, recorded here.</p>`;
   } else {
     html = `<div class="outcome">No state changed</div><p>An answer or a question, nothing acted on.</p>`;
   }
@@ -221,7 +228,7 @@ function renderOutcome(d){
 function renderTraceRow(d){
   const tr = d.trace || {};
   const codes = [...new Set(tr.policy_codes||[])];
-  const state = tr.state_changed ? `<span class="pill allow">refund</span>` : tr.escalated ? `<span class="pill deny">human</span>` : tr.held_on_ambiguity ? `<span class="pill triage">asked</span>` : "";
+  const state = tr.state_changed ? `<span class="pill allow">refund</span>` : tr.escalated ? `<span class="pill deny">human</span>` : tr.held_on_ambiguity ? `<span class="pill triage">asked</span>` : tr.reply_replaced ? `<span class="pill deny">replaced</span>` : tr.checked_against_policy ? `<span class="pill allow">grounded</span>` : "";
   const row = document.createElement("tr");
   row.innerHTML = `<td>${d.turn}</td><td class="m">${esc(bare(d.model))}</td><td class="m">${esc((tr.tools||[]).join(" → "))}</td>` +
                   `<td class="m">${esc(codes.join(", "))}</td><td>${state}</td><td>${(tr.usd||0).toFixed(4)}</td><td>${tr.latency_ms||""}</td>`;

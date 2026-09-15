@@ -18,6 +18,7 @@ from typing import Any, Callable
 from .providers import active, build_client
 from .tools import TOOLS, Outcome, dispatch
 from .trace import TurnTrace
+from .grounding import check as ground, fallback
 from .triage import log_flagged, screen
 
 SYSTEM = """You are Bookly's customer support agent. Bookly is an online bookstore.
@@ -108,6 +109,9 @@ class Agent:
         before_escalations = len(self.outcome.escalations)
         before_ambiguities = len(self.outcome.ambiguities)
         before_calls = len(self.outcome.calls)
+        before_sources = len(self.outcome.policy_sources)
+        self._policy_topics_this_turn: list[str] = []
+        self._tools_this_turn: list[str] = []
         usage_start = len(self.usage)
 
         model = self.model or self.provider.model("heavy")
@@ -147,6 +151,8 @@ class Agent:
             if not tool_uses:
                 reply = "".join(b.text for b in response.content
                                 if b.type == "text").strip()
+                self._tools_this_turn = self.outcome.calls[before_calls:]
+                reply = self._ground(reply, trace, before_sources)
                 this_turn = self.usage[usage_start:]
                 trace.model = model
                 trace.tokens_in = sum(i for _r, _m, i, _o in this_turn)
@@ -167,6 +173,8 @@ class Agent:
             for block in tool_uses:
                 args = dict(block.input or {})
                 result = dispatch(block.name, args, self.outcome)
+                if block.name == "lookup_policy":
+                    self._policy_topics_this_turn.append(args.get("topic", ""))
                 if isinstance(result, dict) and result.get("code"):
                     trace.policy_codes.append(result["code"])
                 if self.on_tool:
@@ -192,6 +200,36 @@ class Agent:
         self.last_trace = trace
         return ("I am having trouble completing that. Let me put you through to a "
                 "colleague who can help.")
+
+    def _ground(self, reply: str, trace: TurnTrace, before_sources: int) -> str:
+        """Hold a general-question reply to the published text it looked up.
+
+        Runs when the turn read a policy note, or when triage called it a
+        general question and nothing was looked up at all. Refund verdicts are
+        already code and are not re-checked. A reply that states a Bookly fact
+        the source does not contain is replaced, and the claims are recorded.
+        """
+        sources = self.outcome.policy_sources[before_sources:]
+        tools_this_turn = self._tools_this_turn
+        answered_from_nothing = trace.intent == "general_question" and not tools_this_turn
+        if not sources and not answered_from_nothing:
+            # Facts from find_orders or get_order_status are not policy and the
+            # grounder has no source for them; checking would flag the truth.
+            return reply
+        trace.policy_misses = [t for t, src in zip(self._policy_topics_this_turn, sources)
+                               if not src]
+        verdict, usage = ground(self.client, self.provider.model("light"), reply, sources)
+        self.usage.append(usage)
+        trace.grounded = verdict.grounded
+        trace.unsupported = list(verdict.unsupported)
+        trace.checked_against_policy = True
+        if verdict.grounded:
+            return reply
+        replacement = fallback(sources)
+        # The history must say what the customer actually saw.
+        self.history[-1] = Turn("assistant", [{"type": "text", "text": replacement}])
+        trace.reply_replaced = True
+        return replacement
 
     def _usd(self, rows) -> float:
         from .costs import cost
