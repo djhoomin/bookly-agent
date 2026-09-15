@@ -27,7 +27,11 @@
   .pill.plain{background:var(--you);color:var(--muted)}
   main{display:grid;grid-template-columns:minmax(380px,11fr) minmax(360px,9fr);min-height:0}
   /* left: the conversation */
-  .chat{display:grid;grid-template-rows:1fr auto auto;min-height:0;border-right:1px solid var(--rule)}
+  .chat{display:grid;grid-template-rows:auto 1fr auto auto;min-height:0;border-right:1px solid var(--rule)}
+  .notice{padding:9px 22px;font-size:12.5px;color:var(--muted);background:var(--panel);border-bottom:1px solid var(--rule)}
+  .notice b{color:var(--ink);font-weight:500}
+  .notice.handed{background:var(--triage-bg);color:var(--triage)}
+  .notice.handed b{color:var(--triage)}
   .log{overflow:auto;padding:22px 22px 8px;display:flex;flex-direction:column;gap:12px}
   .msg{max-width:78%;padding:10px 14px;border-radius:10px;white-space:pre-wrap}
   .msg.you{align-self:flex-end;background:var(--you)}
@@ -75,6 +79,9 @@
 </header>
 <main>
   <section class="chat">
+    <div class="notice" id="notice"><b>You are chatting with Bookly's AI assistant.</b> It can look up your orders,
+      start a return, and answer questions from Bookly's published policies. It cannot make exceptions.
+      You can ask for a person at any time.</div>
     <div class="log" id="log"></div>
     <div class="chips" id="chips"></div>
     <form id="form">
@@ -256,6 +263,11 @@ async function send(text){
     if(d.error){ thinking.remove(); add("error", d.error, "err"); return; }
     thinking.innerHTML = `<span class="who">bookly</span>${esc(d.reply)}`;
     renderTriage(d.triage, d.model); renderTools(d.tools, d.triage); renderOutcome(d); renderTraceRow(d);
+    if(d.escalations.length || (d.trace && d.trace.handed_over)){
+      const t = d.escalations.length ? d.escalations[0].ticket : "";
+      $("notice").className = "notice handed";
+      $("notice").innerHTML = `<b>A person has this conversation now${t ? ", ticket " + esc(t) : ""}.</b> Anything you write here goes onto the ticket for them. The assistant will not act on it.`;
+    }
   } catch(e){ thinking.remove(); add("error", String(e), "err"); }
   finally{ busy = false; $("send").disabled = false; $("text").focus(); }
 }
@@ -264,6 +276,8 @@ $("form").addEventListener("submit", e => { e.preventDefault(); const t = $("tex
 $("reset").addEventListener("click", async () => {
   const m = await (await fetch("/api/reset", {method:"POST", headers:{"Content-Type":"application/json"}, body: JSON.stringify({session})})).json();
   session = m.session; $("log").innerHTML = ""; $("trace").innerHTML = "";
+  $("notice").className = "notice";
+  $("notice").innerHTML = `<b>You are chatting with Bookly's AI assistant.</b> It can look up your orders, start a return, and answer questions from Bookly's published policies. It cannot make exceptions. You can ask for a person at any time.`;
   $("triage").innerHTML = `<span class="empty">New conversation.</span>`;
   $("tools").innerHTML = `<span class="empty">No tools called yet.</span>`;
   $("outcome").innerHTML = `<span class="empty">No state changed.</span>`;

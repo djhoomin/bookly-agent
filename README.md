@@ -197,6 +197,12 @@ refunding yours".
 conversation is on the left. On the right is what the agent did with the last turn: what
 triage decided and where it routed, each tool call with its arguments and the policy verdict,
 whether any state changed, and a running trace with model, tools, policy code and cost per turn.
+The chat carries a customer-facing notice that this is an AI assistant, what it can do, that it
+cannot make exceptions, and that a person is available on request. Article 50 of the EU AI Act
+requires the first part for any system that talks to people, in force since August 2026; the
+rest is what a customer needs to know to use it well. After a handover the notice changes to
+say a person has the conversation and the assistant will not act on anything further.
+
 The outcome card also says when a prose answer was checked against the published text, and
 what the model wanted to say when it was replaced. Both screeners are shown by name with what
 each said: Haiku's routing verdict and the claim it
