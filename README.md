@@ -33,6 +33,27 @@ directory and those are gitignored. The committed reference run is in `samples/`
 | `I'd like to return my copy of Dune. ria@example.com` | Two Dunes on the account, one ebook and one paperback. The agent has nothing to act on and asks. |
 | `Refund BK-09988, I didn't enjoy it. sam@example.com` | Delivered 55 days ago. Policy refuses, the agent reports it and offers a person. |
 | `bk10231 arrived damaged, I want to send it back. sam@example.com` | Inside the window, typo and all. The return completes. |
+| `I never got my book. sam@example.com` then `The Idiot. Just refund it.` | The carrier says delivered. Policy calls it a delivery dispute and the agent hands over. No refund. |
+| `How do I reset my password?` | Nothing to look up on an account. The agent reads the published policy and answers. |
+
+## Assumptions
+
+The brief says to make reasonable assumptions and document them. These are the ones that
+shape what you see:
+
+- **The clock is frozen** at 14 September 2026 in `backend.py`, so "delivered 5 days ago" stays
+  true and the eval set stays deterministic.
+- **The backend is a dict.** Five orders, two customers, three policy notes. Everything
+  interesting lives in `policy.py`, and the mock is deliberately dumb so the surface is honest
+  about what has and has not been built.
+- **An email address identifies a customer and does not authenticate them.** See the decisions
+  section for why that is the largest gap to a deployment.
+- **Memory is one conversation.** The `Agent` holds its own history and nothing persists across
+  conversations, so there is no cross-session context to leak or to get wrong.
+- **A support agent never grants exceptions.** Goodwill belongs behind a human, so there is no
+  code path for one.
+- **Prices are list, in USD; orders are in EUR.** Cost figures are computed from measured tokens
+  at Anthropic's published rates and Mistral's published rate of zero for moderation.
 
 ## How it is put together
 
@@ -117,7 +138,7 @@ pane is the part a buyer should ask to see. Open it with `?say=Where's my book?`
 
 `evals/` ships with the agent rather than after it. The cases assert on
 **outcomes**, not wording: did a refund actually fire, was a human brought in,
-was a state-changing action taken against the wrong order. Eight of the fourteen
+was a state-changing action taken against the wrong order. Eight of the fifteen
 cases pass only if the agent *refuses* or *asks*, which is the half that
 containment metrics cannot see.
 
@@ -185,18 +206,18 @@ email addresses on purpose, so it is ignored rather than allowed to bury the rea
 Moderation is listed as free on Mistral's API pricing page. The call is still counted, so a
 future price is one number away.
 
-Measured across the eval suite, 71 API calls of which 17 are moderation, at list prices:
+Measured across the eval suite, 76 API calls of which 18 are moderation, at list prices:
 
 | | Per conversation | 10,000/day | Per year |
 |---|---|---|---|
-| routed | $0.0112 | $112 | **$40,939** |
-| all Opus | $0.0300 | $300 | **$109,509** |
-| saved | **63%** | | **$68,570** |
+| routed | $0.0110 | $110 | **$40,097** |
+| all Opus | $0.0303 | $303 | **$110,566** |
+| saved | **64%** | | **$70,469** |
 
 `python -m bookly.costs` recomputes this from whatever usage you feed it, so it
 runs against production traffic rather than needing a rewrite.
 
-Two of fourteen conversations went to Opus: the fraud signal and the threat, because anything
+Two of fifteen conversations went to Opus: the fraud signal and the threat, because anything
 risky is routed to the heavy model. An abusive customer costs more to serve. That is a choice,
 and the trace makes it visible rather than burying it in an average.
 
@@ -250,10 +271,10 @@ happened that day.
 `python -m bookly.analyze` computes the operating numbers straight from the trace:
 
 ```
-resolved without a human              86%   (12/14)
-escalated                             14%   (2/14)
-changed state (refund issued)         29%   (4/14)
-saw several orders, acted on none     29%   (4/14)
+resolved without a human              87%   (13/15)
+escalated                             13%   (2/15)
+changed state (refund issued)         27%   (4/15)
+saw several orders, acted on none     27%   (4/15)
 
 why the policy function refused
     3  outside_window
@@ -268,9 +289,9 @@ flagged turns: 2
   fraud_signal     pressure_to_bypass_policy_is_flagged      haiku
   abusive_language abuse_is_logged_and_the_customer_is_...   mistral  violence_and_threats 0.652
 
-moderation ran on 17/17 turns;  flags decided by: 1 haiku, 1 mistral
+moderation ran on 18/18 turns;  flags decided by: 1 haiku, 1 mistral
 
-cost 0.1570 USD over 14 conversations = $0.01122 each, $112.16 at 10k/day
+cost 0.1648 USD over 15 conversations = $0.01099 each, $109.85 at 10k/day
 ```
 
 The test for whether the schema is right: can someone answer "why did we refuse 41 refunds last
@@ -293,7 +314,7 @@ reason from customer-facing text. Three things followed:
   neither of which is an eligibility decision
 - it got **24% cheaper** on the accounting in use at the time, $0.01075 to $0.00817 per
   conversation, because a direct answer takes fewer round trips than reading prose and
-  reasoning about it. The per-turn accounting that replaced it (see below) reads $0.01122 on the fourteen-case set with moderation.
+  reasoning about it. The per-turn accounting that replaced it (see below) reads $0.01099 on the fifteen-case set with moderation.
 
 `analyze.py` now asserts this rather than describing it: a return question answered without
 consulting `policy.py` prints a warning.
