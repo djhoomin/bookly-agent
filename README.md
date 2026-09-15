@@ -60,7 +60,7 @@ shape what you see:
 - **The backend is a dict.** Five orders, two customers, four policy notes. Everything
   interesting lives in `policy.py`, and the mock is deliberately dumb so the surface is honest
   about what has and has not been built.
-- **Verification proves control of an inbox, not identity.** The code is deterministic per
+- **Verification proves control of an inbox. Identity is a separate question.** The code is deterministic per
   address so the eval set and the demo can type it; a real deployment generates one per
   request, expires it, and sends it, or uses the customer's authenticated session.
 - **Memory is one conversation.** The `Agent` holds its own history and nothing persists across
@@ -131,10 +131,10 @@ prompt holds tone and judgement, about 300 words with no eligibility rule in it,
 absence is the evidence: everything that could move into code has.
 
 *Traded away:* flexibility. There is no path for a goodwill exception, which a
-real deployment needs. That belongs behind an authenticated human, not behind a
+real deployment needs. That belongs behind an authenticated human, out of reach of a
 persuasive customer.
 
-**The clarifying question is a gate, not a behaviour.** `start_return` requires a
+**The clarifying question is a gate.** `start_return` requires a
 resolved `order_id`, and `find_orders` returns every matching order. When there is
 more than one, the model has nothing it can act on, so it asks. Prompting a model
 to "ask when unsure" produces something that usually happens; removing the code
@@ -172,7 +172,8 @@ is nothing left to push. The case for it replays a handover and then sends an el
 and a direct instruction to process it; both land on the ticket and neither reaches a model.
 
 *Traded away:* a customer who asks something new and unrelated while waiting is answered by
-the person, not the bot. Correct direction to fail, and the person has the whole transcript.
+the person, since the bot has stepped back. Correct direction to fail, and the person has the
+whole transcript.
 
 **A self-harm signal is not a support ticket.** When either screener flags one, the model
 does not get to answer. The customer gets fixed text written by a person: an acknowledgement,
@@ -228,8 +229,9 @@ order that does not exist get the same reply, so order numbers cannot be enumera
 through the agent. Three wrong codes and the tool says hand over.
 
 *Traded away:* one more turn on every account conversation, which is what real support
-channels do anyway. And what verification proves is control of an inbox, not identity; a
-real deployment would use the customer's authenticated session where one exists. The
+channels do anyway. And what verification proves is control of an inbox; identity is a
+separate question, and a real deployment would use the customer's authenticated session
+where one exists. The
 inbox here is mocked and shown in the chat so the demo can proceed on screen.
 
 ## The demo UI
@@ -264,7 +266,7 @@ lead would look at, and nothing on it was inferred from the wording.
 ## Evaluation
 
 `evals/` ships with the agent rather than after it. The cases assert on
-**outcomes**, not wording: did a refund actually fire, was a human brought in,
+**outcomes** rather than wording: did a refund actually fire, was a human brought in,
 was a state-changing action taken against the wrong order. Fourteen of the twenty-four
 cases pass only if the agent *refuses*, *asks*, *declines to invent*, or *stays out of it*, which is the half that
 containment metrics cannot see.
@@ -361,7 +363,7 @@ rose from about a cent to nearly two when the verification gate went in, since e
 conversation gained a turn. That is the price of the fourth gate, and it is in the table. An abusive customer costs more to serve. That is a choice,
 and the trace makes it visible rather than burying it in an average.
 
-**Routing is an optimisation, not a safety mechanism.** The classifier called the ambiguous Dune
+**Routing is an optimisation; correctness never depends on it.** The classifier called the ambiguous Dune
 request *simple* and sent it to Haiku, which is arguably wrong. It did not matter: `find_orders`
 returned two matches, the gate held, and the agent asked. Correctness lives in the policy
 function and the tool interface, both model-independent, so a triage miss costs a less polished
@@ -419,7 +421,7 @@ The full eval set passes on `openrouter-eu`, 24 of 24, and `samples/trace.openro
 is that run: same tools, same policy codes, same outcomes, with `provider` and `residency`
 recorded on every row.
 
-For a European enterprise buyer this is a procurement gate, not a preference. A support agent
+For a European enterprise buyer this is a procurement gate before it is a preference. A support agent
 handles names, order history and complaints, so it is GDPR-bound by default. An architecture
 that cannot answer the residency question does not reach a pilot at a bank, an insurer or a
 public body however good the agent is. Here the answer is an environment variable.
@@ -526,7 +528,7 @@ keep, and each is fixed in the history.
   The flag is now derived from the tool result: `find_orders` returned more than one match
   and no state changed. It is labelled for exactly that, and it reads a quarter of
   conversations rather than most of them.
-- **Cost was cumulative, not per turn.** Turn two of a conversation carried turn one's tokens
+- **Cost was cumulative across the conversation instead of per turn.** Turn two of a conversation carried turn one's tokens
   and dollars, so multi-turn conversations were double counted and the analyzer disagreed with
   the cost model. They now print the same total.
 - **Three places, three sets of numbers.** README, deck and `measured.json` each carried

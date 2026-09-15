@@ -129,7 +129,7 @@
     <div class="stack">
       <span class="label">Four gates, all structural</span>
       <pre>start_return(order_id, reason)
-    ^ required, never inferred
+    ^ required, and never inferred
 
 find_orders(email) -&gt; every match
 
@@ -168,7 +168,7 @@ if age &gt; RETURN_WINDOW_DAYS:
       answer to the published text. Explain the policy; never extend it.</p>
     </div>
     <div class="stack">
-      <span class="label">Every refusal has a code, not a mood</span>
+      <span class="label">Every refusal has a code</span>
       <table>
         <tr><th>Order</th><th>Verdict</th><th>Reason</th></tr>
         <tr><td class="case">BK-10231</td><td><span class="pill allow">allow</span></td>
@@ -217,8 +217,8 @@ if age &gt; RETURN_WINDOW_DAYS:
   triage -&gt; simple  -&gt; haiku-4-5
   find_orders -&gt; 2 matches
   agent asks which one          OK</pre>
-      <p style="font-size:13.5px"><strong>Routing is an optimisation, not a safety mechanism.</strong>
-      A triage miss costs a less polished reply, never a wrong refund.</p>
+      <p style="font-size:13.5px"><strong>Routing is an optimisation; correctness never depends on it.</strong>
+      A triage miss costs a less polished reply and never a wrong refund.</p>
       <div class="trade">
         <div class="label">The second job</div>
         <p style="font-size:13.5px">A threat is logged and the eligible refund still goes through;

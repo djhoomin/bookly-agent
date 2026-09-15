@@ -115,10 +115,10 @@ class Agent:
         """Send one customer message, run the tool loop, return the reply.
 
         The turn is screened first by a small model, which picks the model for
-        this turn and flags abuse. Routing is an optimisation, not a safety
-        mechanism: correctness comes from the policy function and the tool gate,
-        and both are model-independent. A triage miss costs a less polished
-        reply, never a wrong refund.
+        this turn and flags abuse. Routing is an optimisation; correctness never
+        depends on it. It comes from the policy function and the tool gate, and
+        both are model-independent. A triage miss costs a less polished reply
+        and never a wrong refund.
         """
         import time
 
