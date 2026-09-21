@@ -13,6 +13,11 @@ import types
 
 os.environ["BOOKLY_TRACE_LOG"] = os.devnull
 os.environ["BOOKLY_ABUSE_LOG"] = os.devnull
+os.environ["BOOKLY_SAFETY_LOG"] = os.devnull
+# Offline means offline. With a Mistral key in .env the screen would call the
+# moderation endpoint and add a usage row; this file must pass with no key
+# and no network. The timeout test re-enables it for itself and turns it off again.
+os.environ["BOOKLY_MODERATION"] = "off"
 
 from bookly import openai_bridge, providers, triage  # noqa: E402
 from bookly.agent import Agent  # noqa: E402
